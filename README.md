@@ -293,3 +293,24 @@ BrainPilot's curated knowledge base is replaced by this pipeline's retrieved
 Exa sources and its LLM fabrication judge by the parameter-free grounding
 proxy. Implementation lives in `src/agents/auditor.py`.
 
+---
+
+## Graph of Trace
+
+Alongside the grounding audit, each report carries a **Graph of Trace** — an
+auditable record of the workflow that produced it. As the supervisor runs, it
+records the research subgoal, every `planning_agent` / `web_search_retriever`
+tool call, the evidence each call returned, and the final synthesized report,
+then appends a `## Graph of Trace` section rendering those steps as a linked
+tree. This lets a reader follow and inspect exactly how a result was reached.
+
+The recorder is deterministic and parameter-free (it captures tool names,
+inputs, source counts, and citation counts the supervisor already has), so it
+adds no API calls and complements the grounding auditor: the trace shows *how*
+the report was built, the auditor checks *whether* its claims are grounded.
+Adapted from the Graph of Trace in *BrainPilot: Automating Brain Discovery
+with Agentic Research* (arXiv:2607.15079) — Mode 2 adapted port, where
+BrainPilot's full graph over PI and specialist agents is replaced by a per-step
+trace over this pipeline's own agents. Implementation lives in
+`src/agents/research_trace.py`.
+
