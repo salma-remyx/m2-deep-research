@@ -1,0 +1,18 @@
+schema_version: 1
+fork: salma-remyx/m2-deep-research
+observed_landing_zones:
+- path: src/agents/
+  shape_tags:
+  - middleware
+  confirmed_by:
+  - arxiv: 2607.15257v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "WebSearchRetriever.search_with_subqueries \u2014 invoked\
+      \ by WebSearchRetriever.retrieve(), which SupervisorAgent exposes as its web_search_retriever\
+      \ tool, reached from main.py's run_research CLI entry"
+    branch: searchos-v1-towards-robust-open-domain-information-seeking-a
+    timestamp: '2026-07-18T03:22:09Z'
+  last_observed: '2026-07-18T03:22:09Z'
+rejected_shapes: []
+coordination_signals: []
+last_updated: '2026-07-18T03:22:09Z'
