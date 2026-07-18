@@ -273,3 +273,23 @@ Built with:
 - [Exa](https://exa.ai/) - Neural web search
 - [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) - API client
 - [OpenRouter](https://openrouter.ai/) - LLM routing
+
+---
+
+## Report Grounding Auditor
+
+After the supervisor synthesizes a report, a **grounding auditor** runs an
+independent pass that checks the report's inline citations and numeric claims
+against the sources actually retrieved by the web search retriever, then
+appends a `Source Grounding Audit` section to the report flagging anything it
+could not trace back to evidence. This surfaces fabricated or unsupported
+citations before the report ships.
+
+The auditor is deterministic and parameter-free (citation-URL matching plus
+lexical claim overlap), so it runs on every report with no extra API calls.
+Adapted from the Auditor agent in *BrainPilot: Automating Brain Discovery
+with Agentic Research* (arXiv:2607.15079) — Mode 2 adapted port, where
+BrainPilot's curated knowledge base is replaced by this pipeline's retrieved
+Exa sources and its LLM fabrication judge by the parameter-free grounding
+proxy. Implementation lives in `src/agents/auditor.py`.
+

@@ -19,6 +19,8 @@ class WebSearchRetriever:
         self.api_key = Config.OPENROUTER_API_KEY
         self.base_url = Config.OPENROUTER_BASE_URL
         self.model = Config.OPENROUTER_MODEL
+        # Last set of raw search results gathered for an audit pass.
+        self.last_search_results: List[Dict[str, Any]] = []
 
         self.system_prompt = """You are a web search retrieval specialist.
 
@@ -206,6 +208,8 @@ Be thorough and detailed - this will feed into a comprehensive research report."
 
             # Execute searches
             search_results = self.search_with_subqueries(subqueries)
+            # Expose raw results for the supervisor's grounding auditor.
+            self.last_search_results = search_results
 
             # Synthesize findings
             findings = self.synthesize_findings(research_query, search_results)

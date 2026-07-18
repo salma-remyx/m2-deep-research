@@ -6,6 +6,7 @@ from rich.console import Console
 from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
+from src.agents.auditor import ReportAuditor
 
 # Initialize rich console
 console = Console()
@@ -28,6 +29,11 @@ class SupervisorAgent:
         # Initialize sub-agents
         self.planning_agent = PlanningAgent()
         self.web_search_retriever = WebSearchRetriever()
+
+        # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
+        self.auditor = ReportAuditor()
+        # Sources captured from the retriever for the post-synthesis audit.
+        self._gathered_sources: List[Dict[str, Any]] = []
 
         # Conversation history with interleaved thinking
         self.messages: List[Dict[str, Any]] = []
@@ -217,7 +223,14 @@ Research Workflow:
         elif tool_name == "web_search_retriever":
             research_query = tool_input.get("research_query", "")
             subqueries_json = tool_input.get("subqueries_json", "")
-            return self.web_search_retriever.retrieve(research_query, subqueries_json)
+            result = self.web_search_retriever.retrieve(research_query, subqueries_json)
+            # Capture retrieved sources so the post-synthesis auditor can
+            # verify the final report against the evidence actually gathered.
+            self._gathered_sources = (
+                getattr(self.web_search_retriever, "last_search_results", None)
+                or self._gathered_sources
+            )
+            return result
 
         else:
             return f"Error: Unknown tool '{tool_name}'"
@@ -276,6 +289,8 @@ Research Workflow:
                 if response.stop_reason == "end_turn":
                     # Model has finished - extract final response
                     final_text = self._extract_text_from_content(response.content)
+                    # BrainPilot-style grounding audit before returning the report.
+                    final_text = self._audit_report(final_text)
                     return final_text
 
                 elif response.stop_reason == "tool_use":
@@ -336,6 +351,29 @@ Research Workflow:
                 text_parts.append(block.text)
 
         return "\n\n".join(text_parts) if text_parts else "No text content in response."
+
+    def _audit_report(self, report: str) -> str:
+        """Run a grounding audit on the final report and append the findings.
+
+        Inspired by BrainPilot's Auditor agent (arXiv:2607.15079v1): an
+        independent post-synthesis pass that checks the report's citations and
+        claims against the sources actually retrieved by the web search
+        retriever, so fabricated citations surface before the report ships.
+        Auditing never blocks delivery -- on any error the report is returned
+        unchanged.
+        """
+        try:
+            result = self.auditor.audit(report, self._gathered_sources)
+            console.print(
+                f"[bold green]✓ Auditor:[/bold green] {result.grounded_citations}/"
+                f"{result.total_citations} citations grounded "
+                f"({len(result.unsupported_claims)} unsupported claim(s)) "
+                f"against {result.sources_checked} source(s)."
+            )
+            return report + "\n" + self.auditor.format_report(result)
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Auditor skipped: {exc}[/dim]")
+            return report
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """
