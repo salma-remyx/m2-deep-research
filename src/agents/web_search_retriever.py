@@ -2,7 +2,8 @@
 
 import json
 import httpx
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from src.agents.search_state import SearchState
 from src.tools.exa_tool import ExaTool
 from src.utils.config import Config
 
@@ -36,17 +37,27 @@ Return structured results with:
 
 Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
 
-    def search_with_subqueries(self, subqueries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def search_with_subqueries(
+        self,
+        subqueries: List[Dict[str, Any]],
+        state: Optional[SearchState] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Execute Exa searches for all subqueries.
 
         Args:
             subqueries: List of subquery dictionaries from planning agent
+            state: Optional shared SOCM state. When provided, evidence is
+                deduplicated across subqueries and known-failed search
+                patterns are skipped. A fresh state is created otherwise.
 
         Returns:
             List of search results for each subquery
         """
         all_results = []
+
+        if state is None:
+            state = SearchState()
 
         for subquery in subqueries:
             query_text = subquery.get("query", "")
@@ -55,6 +66,19 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
             include_domains = subquery.get("include_domains")
             exclude_domains = subquery.get("exclude_domains")
             priority = subquery.get("priority", 3)
+
+            # SOCM Failure Memory: skip an identical search pattern that
+            # already returned no evidence instead of burning search budget.
+            if state.known_failure(subquery):
+                state.note_skipped_failure()
+                all_results.append({
+                    "subquery": query_text,
+                    "priority": priority,
+                    "results": [],
+                    "similar_results": [],
+                    "skipped_repeat_failure": True,
+                })
+                continue
 
             # Map time period to date filters (approximate)
             start_date = None
@@ -76,8 +100,13 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
                 type=content_type,
             )
 
-            # Format results
-            formatted_results = self.exa.format_results(search_results)
+            # Format results; remember whether this search found anything.
+            # Failure Memory records genuine empty results, not dedup-only ones.
+            raw_formatted = self.exa.format_results(search_results)
+            yielded_evidence = bool(raw_formatted)
+
+            # SOCM Evidence Graph: dedupe across subqueries and find_similar.
+            formatted_results = state.dedupe(raw_formatted)
 
             # Find similar content for more queries (priority <= 3 instead of <= 2)
             similar_results = []
@@ -88,7 +117,13 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
                         url=top_url,
                         num_results=5,  # Increased from 3 to 5
                     )
-                    similar_results = self.exa.format_results(similar_response)
+                    similar_results = state.dedupe(
+                        self.exa.format_results(similar_response)
+                    )
+
+            # SOCM Failure Memory: remember patterns that found nothing.
+            if not yielded_evidence:
+                state.record_failure(subquery)
 
             all_results.append({
                 "subquery": query_text,

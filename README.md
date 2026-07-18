@@ -273,3 +273,23 @@ Built with:
 - [Exa](https://exa.ai/) - Neural web search
 - [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) - API client
 - [OpenRouter](https://openrouter.ai/) - LLM routing
+
+---
+
+## Search State (SOCM) — adapted from SearchOS-V1
+
+The Web Search Retriever keeps explicit, shared state across a retrieval run
+(`src/agents/search_state.py`) so the search loop is no longer stateless.
+This mirrors the Search-Oriented Context Management idea from SearchOS-V1,
+adapted to this single-agent loop:
+
+- **Evidence Graph** — a URL set deduplicates results across subqueries and
+  against `find_similar()` output, so overlapping queries no longer pile up
+  the same sources.
+- **Failure Memory** — a search pattern that returns no usable evidence is
+  remembered; an identical retry is skipped instead of spending search budget.
+
+Pass a shared `SearchState` into
+`WebSearchRetriever.search_with_subqueries(..., state=...)` to observe the
+effect; `state.stats` reports `deduped`, `failed`, and `skipped_failed`
+counts for a run.
