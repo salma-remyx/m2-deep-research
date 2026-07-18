@@ -12,7 +12,14 @@ observed_landing_zones:
       \ tool, reached from main.py's run_research CLI entry"
     branch: searchos-v1-towards-robust-open-domain-information-seeking-a
     timestamp: '2026-07-18T03:22:09Z'
-  last_observed: '2026-07-18T03:22:09Z'
+  - arxiv: 2607.15079v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent.research() -> _audit_report(), invoked from
+      the end_turn branch of the supervisor's run loop; that loop is driven by main.py's
+      run_research(), the repo's CLI entry point.
+    branch: brainpilot-automating-brain-discovery-with-agentic-research
+    timestamp: '2026-07-18T22:44:40Z'
+  last_observed: '2026-07-18T22:44:40Z'
 rejected_shapes: []
 coordination_signals: []
-last_updated: '2026-07-18T03:22:09Z'
+last_updated: '2026-07-18T22:44:40Z'
