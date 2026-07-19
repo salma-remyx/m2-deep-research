@@ -19,7 +19,14 @@ observed_landing_zones:
       run_research(), the repo's CLI entry point.
     branch: brainpilot-automating-brain-discovery-with-agentic-research
     timestamp: '2026-07-18T22:44:40Z'
-  last_observed: '2026-07-18T22:44:40Z'
+  - arxiv: 2607.11388v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "SupervisorAgent.research() in src/agents/supervisor.py \u2014\
+      \ commit_tool_result runs immediately after execute_tool in the existing tool-use\
+      \ loop, and progress_report()/is_done() run at loop exhaustion. S"
+    branch: structagent-harness-long-horizon-digital-agents-with-unified
+    timestamp: '2026-07-19T15:57:51Z'
+  last_observed: '2026-07-19T15:57:51Z'
 rejected_shapes: []
 coordination_signals: []
-last_updated: '2026-07-18T22:44:40Z'
+last_updated: '2026-07-19T15:57:51Z'
