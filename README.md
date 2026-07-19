@@ -273,3 +273,53 @@ Built with:
 - [Exa](https://exa.ai/) - Neural web search
 - [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) - API client
 - [OpenRouter](https://openrouter.ai/) - LLM routing
+
+---
+
+## Report Grounding Auditor
+
+After the supervisor synthesizes a report, a **grounding auditor** runs an
+independent pass that checks the report's inline citations and numeric claims
+against the sources actually retrieved by the web search retriever, then
+appends a `Source Grounding Audit` section to the report flagging anything it
+could not trace back to evidence. This surfaces fabricated or unsupported
+citations before the report ships.
+
+The auditor is deterministic and parameter-free (citation-URL matching plus
+lexical claim overlap), so it runs on every report with no extra API calls.
+Adapted from the Auditor agent in *BrainPilot: Automating Brain Discovery
+with Agentic Research* (arXiv:2607.15079) — Mode 2 adapted port, where
+BrainPilot's curated knowledge base is replaced by this pipeline's retrieved
+Exa sources and its LLM fabrication judge by the parameter-free grounding
+proxy. Implementation lives in `src/agents/auditor.py`.
+
+**Scope.** BrainPilot's Auditor audits two dimensions — *evidence backing /
+fabrication* and *scientific reliability* (validity defects such as data
+leakage or metric misuse in the experiment pipeline). This port implements
+only the first dimension; the reliability dimension is deliberately not ported
+because it inspects experiment-pipeline artifacts that a general web-research
+tool does not produce. The numeric check within Dimension 1 is a lexical proxy
+(claim-term overlap with retrieved sources), not the reference's exact-value
+grep over workspace artifacts.
+
+---
+
+## Graph of Trace
+
+Alongside the grounding audit, each report carries a **Graph of Trace** — an
+auditable record of the workflow that produced it. As the supervisor runs, it
+records the research subgoal, every `planning_agent` / `web_search_retriever`
+tool call, the evidence each call returned, and the final synthesized report,
+then appends a `## Graph of Trace` section rendering those steps as a linked
+tree. This lets a reader follow and inspect exactly how a result was reached.
+
+The recorder is deterministic and parameter-free (it captures tool names,
+inputs, source counts, and citation counts the supervisor already has), so it
+adds no API calls and complements the grounding auditor: the trace shows *how*
+the report was built, the auditor checks *whether* its claims are grounded.
+Adapted from the Graph of Trace in *BrainPilot: Automating Brain Discovery
+with Agentic Research* (arXiv:2607.15079) — Mode 2 adapted port, where
+BrainPilot's full graph over PI and specialist agents is replaced by a per-step
+trace over this pipeline's own agents. Implementation lives in
+`src/agents/research_trace.py`.
+
