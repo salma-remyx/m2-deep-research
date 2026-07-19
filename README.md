@@ -293,6 +293,15 @@ BrainPilot's curated knowledge base is replaced by this pipeline's retrieved
 Exa sources and its LLM fabrication judge by the parameter-free grounding
 proxy. Implementation lives in `src/agents/auditor.py`.
 
+**Scope.** BrainPilot's Auditor audits two dimensions — *evidence backing /
+fabrication* and *scientific reliability* (validity defects such as data
+leakage or metric misuse in the experiment pipeline). This port implements
+only the first dimension; the reliability dimension is deliberately not ported
+because it inspects experiment-pipeline artifacts that a general web-research
+tool does not produce. The numeric check within Dimension 1 is a lexical proxy
+(claim-term overlap with retrieved sources), not the reference's exact-value
+grep over workspace artifacts.
+
 ---
 
 ## Graph of Trace

@@ -70,6 +70,7 @@ class ResearchTrace:
     _nodes: List[TraceNode] = field(default_factory=list)
     _root: Optional[int] = None
     _last_tool: Optional[int] = None
+    _last_evidence: Optional[int] = None
 
     @property
     def nodes(self) -> List[TraceNode]:
@@ -81,6 +82,7 @@ class ResearchTrace:
         self._nodes = []
         self._root = None
         self._last_tool = None
+        self._last_evidence = None
 
     def record(
         self,
@@ -106,6 +108,7 @@ class ResearchTrace:
         """Record the top-level research subgoal (the user's query)."""
         self._root = self.record(SUBGOAL, goal)
         self._last_tool = None
+        self._last_evidence = None
         return self._root
 
     def record_tool(self, name: str, tool_input: Any) -> int:
@@ -119,14 +122,24 @@ class ResearchTrace:
         """Record evidence returned by the most recent tool call."""
         count = self._count_sources(sources)
         summary = f"{count} source(s) retrieved"
-        return self.record(EVIDENCE, summary, parent=self._last_tool or self._root)
+        self._last_evidence = self.record(
+            EVIDENCE, summary, parent=self._last_tool or self._root
+        )
+        return self._last_evidence
 
     def record_report(self, report: str) -> int:
-        """Record the synthesized report and how many claims it cites."""
+        """Record the synthesized report and how many claims it cites.
+
+        The report is the terminus of the subgoal->tool->evidence->claim chain,
+        so it is chained under the most recent evidence node (falling back to the
+        last tool call, then the subgoal, if a report is recorded before any
+        evidence was gathered).
+        """
         n_citations = len(_LINK_RE.findall(report or ""))
         summary = "synthesized final report"
         detail = f"{n_citations} inline citation(s)"
-        return self.record(CLAIM, summary, detail, parent=self._root)
+        parent = self._last_evidence or self._last_tool or self._root
+        return self.record(CLAIM, summary, detail, parent=parent)
 
     def render(self) -> str:
         """Render the trace as a markdown ``Graph of Trace`` section."""

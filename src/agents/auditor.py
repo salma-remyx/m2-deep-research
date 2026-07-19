@@ -17,9 +17,26 @@ pipeline:
   no extra API keys and is fully deterministic, so it can run on every report
   and be unit-tested offline.
 
+**Scope of the port -- only Dimension 1 is ported.** BrainPilot's Auditor
+persona audits *two* dimensions: (1) *evidence backing / fabrication* -- every
+numeric claim, file/artifact reference, and external citation must trace to
+evidence the session produced; and (2) *scientific reliability* -- the pipeline
+behind a result-bearing claim is inspected for validity defects (data/label
+leakage, metric misuse, baseline/chance confusion, double-dipping, etc.). This
+port implements **only Dimension 1 (grounding/fabrication)**. Dimension 2 is
+deliberately **not** ported: it inspects experiment-pipeline artifacts (split
+logic, configs, logged metrics, model outputs) that exist in BrainPilot's
+per-session workspace but that a general web deep-research tool never produces,
+so there is nothing analogous to audit here.
+
+Within Dimension 1, note the numeric check is a **lexical-overlap proxy**, not
+the reference's exact-value verification: BrainPilot greps the workspace to
+confirm each specific number appears in an artifact, whereas this port only
+checks that a numeric claim's key terms overlap some retrieved source's text.
+
 The core mechanism is preserved: an independent post-synthesis pass that links
 each report citation and claim to retrieved evidence and flags the ones with no
-support -- the ``Graph of Trace`` idea, rendered as a per-claim evidence check.
+support.
 """
 
 import re

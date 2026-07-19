@@ -54,6 +54,19 @@ def test_records_workflow_in_order():
     assert kinds == [SUBGOAL, TOOL_USE, TOOL_USE, EVIDENCE, CLAIM]
 
 
+def test_report_node_chains_under_evidence():
+    """The report is the terminus of subgoal->tool->evidence->claim, so it must
+    chain under the evidence node rather than sit as a sibling of the tools."""
+    trace = ResearchTrace()
+    trace.record_subgoal("What is X?")
+    trace.record_tool("web_search_retriever", {"research_query": "What is X?"})
+    evidence_id = trace.record_evidence(RETRIEVED_SOURCES)
+    report_id = trace.record_report("A report [cite](https://example.com/a).")
+
+    report = next(n for n in trace.nodes if n.node_id == report_id)
+    assert report.parent == evidence_id
+
+
 def test_evidence_counts_flatten_nested_buckets():
     trace = ResearchTrace()
     trace.record_subgoal("q")
