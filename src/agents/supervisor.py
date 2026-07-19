@@ -6,6 +6,7 @@ from rich.console import Console
 from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
+from src.agents.task_state import TaskState, Transition
 
 # Initialize rich console
 console = Console()
@@ -31,6 +32,11 @@ class SupervisorAgent:
 
         # Conversation history with interleaved thinking
         self.messages: List[Dict[str, Any]] = []
+
+        # Unified, verifiable task-progress state (StructAgent, arXiv:2607.11388v1):
+        # progress is committed only on a verifier event and failures are attributed,
+        # replacing the blind loop-to-max-iterations behavior.
+        self.task_state = TaskState()
 
         self.system_prompt = """You are a deep research coordinator specializing in comprehensive, academic-quality research reports. Your goal is to produce thorough, well-structured, in-depth analysis that is easy to read and navigate.
 
@@ -295,6 +301,15 @@ Research Workflow:
                             # Execute the tool
                             result = self.execute_tool(tool_name, tool_input)
 
+                            # Verifier-backed commit: only count progress the
+                            # verifier accepts; route failures with attribution
+                            # instead of looping blindly. (StructAgent, arXiv:2607.11388v1)
+                            transition = self.task_state.commit_tool_result(
+                                tool_name, tool_input, result, tool_use_id
+                            )
+                            tag = "green" if transition == Transition.VERIFIED else "red"
+                            console.print(f"[dim]  -> verifier:[/dim] [{tag}]{transition.value}[/]")
+
                             tool_results.append({
                                 "type": "tool_result",
                                 "tool_use_id": tool_use_id,
@@ -316,8 +331,17 @@ Research Workflow:
                 console.print(f"[bold red]✗ Error during research:[/bold red] {str(e)}")
                 return f"Error during research: {str(e)}"
 
-        console.print(f"[bold yellow]⚠ Research reached maximum iterations ({max_iterations}) without completion.[/bold yellow]")
-        return "Research reached maximum iterations without completion."
+        # StructAgent failure routing: instead of a blind "hit max iterations"
+        # string, ground the outcome in the verified state -- report committed
+        # progress + attributed failures, and whether enough evidence accumulated.
+        console.print(
+            f"[bold yellow]⚠ Research reached maximum iterations ({max_iterations}); "
+            f"task_state: {self.task_state.committed}/{self.task_state.total} verified.[/bold yellow]"
+        )
+        report = self.task_state.progress_report()
+        if self.task_state.is_done():
+            report += "\nEnough verified evidence accumulated to synthesize a report."
+        return report
 
     def _extract_text_from_content(self, content: List[Any]) -> str:
         """

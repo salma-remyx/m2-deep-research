@@ -273,3 +273,24 @@ Built with:
 - [Exa](https://exa.ai/) - Neural web search
 - [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) - API client
 - [OpenRouter](https://openrouter.ai/) - LLM routing
+
+---
+
+## Verifier-Backed Task State
+
+*Adapted from* **StructAgent: Harness Long-horizon Digital Agents with Unified Causal Structure** (arXiv:2607.11388v1).
+
+The supervisor maintains a unified, verifiable task-progress state (`src/agents/task_state.py`) so that long-horizon runs no longer loop to `max_iterations` over raw history with no progress signal.
+
+- **Verifier-gated commits** — each tool result is fed through a verifier; only results that carry grounded evidence (a parseable plan, source URLs, sufficient non-error content) advance a typed milestone.
+- **Attributed failures** — rejected results are recorded with the tool and the reason, so the pipeline knows where a long-horizon run broke down.
+- **State-grounded completion** — when the loop is exhausted, the supervisor returns a report of verified progress plus attributed failures (and whether enough evidence accumulated to synthesize), rather than a blind "reached maximum iterations" string.
+
+| Component | Treatment |
+|-----------|-----------|
+| Unified state + verifier-backed transitions | Ported (core mechanism) |
+| Learned / LLM verifier | Substituted with a parameter-free heuristic verifier |
+| OSWorld action space + benchmark | Cut (not applicable to web research; evaluation is downstream) |
+
+This is a Mode 2 (adapted) port: the paper's core mechanism is kept at full fidelity while auxiliary components are substituted with target-native equivalents.
+
