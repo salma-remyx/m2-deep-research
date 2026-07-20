@@ -323,3 +323,36 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Evidence State
+
+Before synthesis, the supervisor maintains an **evidence state** over the run:
+each planned subquery is tracked as an open information need, and as the web
+search retriever returns its per-subquery source buckets the tracker classifies
+every need as **confirmed** (multiple independent sources corroborate it),
+**conflicting** (corroborating sources cite divergent figures), or still
+**open** (too few or non-corroborating sources). A closure snapshot — how many
+needs are confirmed overall, which are still open, and where evidence conflicts
+— is appended to the report as an `## Evidence State` section.
+
+The tracker is deterministic and parameter-free (lexical corroboration plus
+numeric-divergence detection over already-retrieved sources), so it adds no API
+calls and complements the grounding auditor and Graph of Trace: the auditor
+checks *whether* the report's claims are grounded, the trace shows *how* it was
+built, and the evidence state shows *which planned needs are confirmed,
+conflicting, or still open*. Adapted from the evidence-state system in
+*Omni-Decision: A Progressive Evidence-State Agent System for Omni-Modal QA*
+(arXiv:2607.11433) — Mode 2 adapted port, where Omni-Decision's heterogeneous
+media/web/computation normalizers are replaced by this pipeline's web-only
+retriever buckets and its LLM evidence judge by the parameter-free
+corroboration/divergence proxy.
+
+**Scope.** Omni-Decision pairs the structured state with a control loop that
+re-conditions planning, evidence acquisition, repair, and stopping off it. This
+port implements only the structured state and its closure snapshot; the
+multi-round repair/stopping loop is deliberately not ported, since this
+pipeline's tool-use loop is single-shot and driven by the supervisor's own
+interleaved thinking — the rendered closure snapshot is the signal such a loop
+would consume. Implementation lives in `src/agents/evidence_state.py`.
+

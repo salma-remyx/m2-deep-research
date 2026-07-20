@@ -8,6 +8,7 @@ from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.evidence_state import EvidenceStateTracker
 
 # Initialize rich console
 console = Console()
@@ -35,6 +36,8 @@ class SupervisorAgent:
         self.auditor = ReportAuditor()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
+        # Pre-synthesis evidence-state closure tracker (Omni-Decision-style).
+        self.evidence_state = EvidenceStateTracker()
         # Sources captured from the retriever for the post-synthesis audit.
         self._gathered_sources: List[Dict[str, Any]] = []
 
@@ -221,7 +224,10 @@ Research Workflow:
         """
         if tool_name == "planning_agent":
             research_query = tool_input.get("research_query", "")
-            return self.planning_agent.execute(research_query)
+            result = self.planning_agent.execute(research_query)
+            # Register the planned subqueries as open evidence needs.
+            self.evidence_state.register_needs_from_plan(result)
+            return result
 
         elif tool_name == "web_search_retriever":
             research_query = tool_input.get("research_query", "")
@@ -233,6 +239,8 @@ Research Workflow:
                 getattr(self.web_search_retriever, "last_search_results", None)
                 or self._gathered_sources
             )
+            # Commit retrieved sources as evidence against the open needs.
+            self.evidence_state.commit_evidence(self._gathered_sources)
             return result
 
         else:
@@ -260,6 +268,8 @@ Research Workflow:
         # Start a fresh Graph of Trace rooted at this research subgoal.
         self.trace.reset()
         self.trace.record_subgoal(query)
+        # Start a fresh evidence state for this run's planned needs.
+        self.evidence_state.reset()
 
         iteration = 0
 
@@ -298,6 +308,8 @@ Research Workflow:
                     final_text = self._extract_text_from_content(response.content)
                     # BrainPilot-style grounding audit before returning the report.
                     final_text = self._audit_report(final_text)
+                    # Omni-Decision-style evidence-closure snapshot.
+                    final_text = self._summarize_evidence(final_text)
                     # Append the Graph of Trace so the workflow travels with it.
                     self.trace.record_report(final_text)
                     final_text += self.trace.render()
@@ -390,6 +402,28 @@ Research Workflow:
             return report + "\n" + self.auditor.format_report(result)
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
+            return report
+
+    def _summarize_evidence(self, report: str) -> str:
+        """Render the evidence-state closure snapshot and append it to the report.
+
+        Inspired by Omni-Decision's evidence-state system (arXiv:2607.11433v1):
+        a per-need view of what is confirmed, conflicting, and still open across
+        the planned subqueries, maintained during the run and surfaced as an
+        inspectable section. Never blocks delivery -- on any error the report is
+        returned unchanged.
+        """
+        try:
+            state = self.evidence_state.classify()
+            console.print(
+                f"[bold green]✓ Evidence state:[/bold green] "
+                f"{len(state.confirmed)}/{state.total} needs confirmed "
+                f"({len(state.conflicting)} conflicting, "
+                f"{len(state.open_needs)} open)."
+            )
+            return report + self.evidence_state.render(state)
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Evidence state skipped: {exc}[/dim]")
             return report
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
