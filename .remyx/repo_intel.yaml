@@ -4,6 +4,7 @@ observed_landing_zones:
 - path: src/agents/
   shape_tags:
   - middleware
+  - registry-add
   confirmed_by:
   - arxiv: 2607.15257v1
     mode: Mode 2 (adapted port)
@@ -26,7 +27,14 @@ observed_landing_zones:
       \ loop, and progress_report()/is_done() run at loop exhaustion. S"
     branch: structagent-harness-long-horizon-digital-agents-with-unified
     timestamp: '2026-07-19T15:57:51Z'
-  last_observed: '2026-07-19T15:57:51Z'
+  - arxiv: 2607.11433v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent's tool dispatch (register_needs_from_plan
+      on the planning_agent result; commit_evidence on the web_search_retriever result)
+      and the research run-loop report finalization (_summarize_ev
+    branch: omni-decision-a-progressive-evidence-state-agent-system-for-
+    timestamp: '2026-07-20T10:15:15Z'
+  last_observed: '2026-07-20T10:15:15Z'
 rejected_shapes: []
 coordination_signals: []
-last_updated: '2026-07-19T15:57:51Z'
+last_updated: '2026-07-20T10:15:15Z'
