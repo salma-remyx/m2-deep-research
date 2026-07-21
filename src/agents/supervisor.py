@@ -7,6 +7,7 @@ from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
+from src.agents.claim_verifier import ClaimVerifier
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -33,6 +34,9 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # AgentKGV-style re-verification of unsupported claims via iterative
+        # query rewriting over Exa (runs only when the auditor flags something).
+        self.claim_verifier = ClaimVerifier()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -387,10 +391,35 @@ Research Workflow:
                 f"({len(result.unsupported_claims)} unsupported claim(s)) "
                 f"against {result.sources_checked} source(s)."
             )
-            return report + "\n" + self.auditor.format_report(result)
+            rendered = self.auditor.format_report(result)
+            # Re-verify unsupported claims via iterative query rewriting over
+            # Exa (AgentKGV). Best-effort, bounded, and never blocks delivery.
+            if result.verifiable and result.unsupported_claims:
+                rendered += "\n" + self._verify_unsupported_claims(
+                    result.unsupported_claims
+                )
+            return report + "\n" + rendered
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
+
+    def _verify_unsupported_claims(self, claims: List[str]) -> str:
+        """Re-retrieve for unsupported claims via AgentKGV-style rewrites.
+
+        Wraps :class:`~src.agents.claim_verifier.ClaimVerifier` so a retrieval
+        failure never blocks the report -- on any error the section is skipped.
+        """
+        try:
+            verification = self.claim_verifier.verify(claims)
+            console.print(
+                f"[bold green]✓ Verifier:[/bold green] re-checked "
+                f"{verification.total} unsupported claim(s); "
+                f"{verification.verified_count} recovered via query rewriting."
+            )
+            return self.claim_verifier.format_section(verification)
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Claim verifier skipped: {exc}[/dim]")
+            return ""
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """

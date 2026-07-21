@@ -323,3 +323,30 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Claim Re-verification
+
+The grounding auditor *detects* claims it cannot trace to retrieved sources and
+appends a warning, but it never tries to *recover* them. The **claim
+re-verifier** closes that gap: it feeds the auditor's unsupported claims back
+through an iterative query-rewriting loop over Exa, so a claim that missed only
+because of phrasing (surface-form mismatch) gets a second chance to ground.
+When the auditor flags unsupported claims, the supervisor rewrites each into
+successive verification queries, re-retrieves, and appends an
+`Unsupported-claim re-verification` section marking each claim ✅ Recovered or
+❌ Still unsupported.
+
+The pass is best-effort and bounded (at most a handful of claims, each tried
+against a small rewrite budget), so it never blocks report delivery and its
+cost is predictable. Adapted from the iterative query-rewriting retrieval
+mechanism in *AgentKGV: Agentic LLM-RAG Framework with Two-Stage Training for
+the Fact Verification of Knowledge Graphs* (arXiv:2607.09092) — Mode 2 adapted
+port. AgentKGV's learned query rewriter (trained via SFT distillation + GRPO)
+is replaced by a parameter-free rewriter (stopword-stripped key terms, quoted
+phrase, numeric/entity anchors), mirroring the same substitution the auditor
+port makes for its LLM judge; the GRPO/SFT trainers and T-REx benchmark are cut
+(the repo hosts no training loop). The iterative loop itself — rewrite,
+re-retrieve, check grounding — is the mechanism preserved. Implementation lives
+in `src/agents/claim_verifier.py`.
+
