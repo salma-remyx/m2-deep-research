@@ -34,7 +34,14 @@ observed_landing_zones:
       and the research run-loop report finalization (_summarize_ev
     branch: omni-decision-a-progressive-evidence-state-agent-system-for-
     timestamp: '2026-07-20T10:15:15Z'
-  last_observed: '2026-07-20T10:15:15Z'
+  - arxiv: 2607.09092v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "SupervisorAgent._audit_report (src/agents/supervisor.py)\
+      \ \u2192 _verify_unsupported_claims \u2192 ClaimVerifier.verify; reached from\
+      \ main.py via supervisor.research() on the end-of-turn report path"
+    branch: agentkgv-agentic-llm-rag-framework-with-two-stage-training-f
+    timestamp: '2026-07-21T05:08:10Z'
+  last_observed: '2026-07-21T05:08:10Z'
 rejected_shapes: []
 coordination_signals: []
-last_updated: '2026-07-20T10:15:15Z'
+last_updated: '2026-07-21T05:08:10Z'
