@@ -8,6 +8,7 @@ from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.capacity_budget import CapacityBudget, DELEGATION, EXECUTION
 
 # Initialize rich console
 console = Console()
@@ -35,6 +36,12 @@ class SupervisorAgent:
         self.auditor = ReportAuditor()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
+        # Per-role compute budget: attributes token spend to the delegation
+        # (MiniMax) vs execution (OpenRouter sub-agents) roles and applies the
+        # Think Big, Search Small downsize-execution recipe (arXiv:2607.07548).
+        self.capacity = CapacityBudget()
+        self.capacity.register(DELEGATION, Config.MINIMAX_MODEL)
+        self.capacity.register(EXECUTION, Config.OPENROUTER_MODEL)
         # Sources captured from the retriever for the post-synthesis audit.
         self._gathered_sources: List[Dict[str, Any]] = []
 
@@ -221,12 +228,21 @@ Research Workflow:
         """
         if tool_name == "planning_agent":
             research_query = tool_input.get("research_query", "")
-            return self.planning_agent.execute(research_query)
+            result = self.planning_agent.execute(research_query)
+            # Attribute this execution call's compute to the execution role.
+            self.capacity.record_execution(
+                getattr(self.planning_agent, "last_usage", None)
+            )
+            return result
 
         elif tool_name == "web_search_retriever":
             research_query = tool_input.get("research_query", "")
             subqueries_json = tool_input.get("subqueries_json", "")
             result = self.web_search_retriever.retrieve(research_query, subqueries_json)
+            # Attribute this execution call's compute to the execution role.
+            self.capacity.record_execution(
+                getattr(self.web_search_retriever, "last_usage", None)
+            )
             # Capture retrieved sources so the post-synthesis auditor can
             # verify the final report against the evidence actually gathered.
             self._gathered_sources = (
@@ -260,6 +276,8 @@ Research Workflow:
         # Start a fresh Graph of Trace rooted at this research subgoal.
         self.trace.reset()
         self.trace.record_subgoal(query)
+        # Start a fresh capacity budget for this run.
+        self.capacity.reset()
 
         iteration = 0
 
@@ -283,6 +301,9 @@ Research Workflow:
 
                     response = stream.get_final_message()
                     console.print()
+                    # Attribute this delegation call's compute to the
+                    # delegation role for the capacity budget.
+                    self.capacity.record_delegation(response.usage)
 
                 # CRITICAL: Append the COMPLETE response to message history
                 # This preserves the interleaved thinking across turns
@@ -301,6 +322,8 @@ Research Workflow:
                     # Append the Graph of Trace so the workflow travels with it.
                     self.trace.record_report(final_text)
                     final_text += self.trace.render()
+                    # Append the per-role capacity budget (Think Big, Search Small).
+                    final_text = self._append_capacity_report(final_text)
                     return final_text
 
                 elif response.stop_reason == "tool_use":
@@ -390,6 +413,29 @@ Research Workflow:
             return report + "\n" + self.auditor.format_report(result)
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
+            return report
+
+    def _append_capacity_report(self, report: str) -> str:
+        """Append the per-role capacity budget section to the report.
+
+        Implements the *Think Big, Search Small* recipe
+        (arXiv:2607.07548v1): surface how compute was distributed across the
+        delegation and execution roles this run and whether the execution role
+        should be downsized. Like the grounding audit it never blocks delivery
+        -- on any error the report is returned unchanged.
+        """
+        try:
+            dist = self.capacity.distribution()
+            rec = self.capacity.recommend_downsize()
+            console.print(
+                f"[bold green]✓ Capacity:[/bold green] delegation "
+                f"{dist.delegation.total_tokens} tok / execution "
+                f"{dist.execution.total_tokens} tok — "
+                f"{'downsize execution' if rec.downsize_execution else 'no change'}."
+            )
+            return report + self.capacity.render()
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Capacity report skipped: {exc}[/dim]")
             return report
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:

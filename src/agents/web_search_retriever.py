@@ -21,6 +21,9 @@ class WebSearchRetriever:
         self.model = Config.OPENROUTER_MODEL
         # Last set of raw search results gathered for an audit pass.
         self.last_search_results: List[Dict[str, Any]] = []
+        # Last OpenRouter usage block, exposed for the supervisor's capacity
+        # budget (Think Big, Search Small, arXiv:2607.07548v1).
+        self.last_usage: Dict[str, Any] = {}
 
         self.system_prompt = """You are a web search retrieval specialist.
 
@@ -181,6 +184,8 @@ Be thorough and detailed - this will feed into a comprehensive research report."
                 )
                 response.raise_for_status()
                 result = response.json()
+                # Expose token usage for the supervisor's capacity budget.
+                self.last_usage = result.get("usage") or {}
                 return result["choices"][0]["message"]["content"]
 
         except Exception as e:

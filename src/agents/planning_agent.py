@@ -2,7 +2,7 @@
 
 import json
 import httpx
-from typing import Dict, Any, List
+from typing import Dict, Any
 from src.utils.config import Config
 
 
@@ -17,6 +17,9 @@ class PlanningAgent:
         self.api_key = Config.OPENROUTER_API_KEY
         self.base_url = Config.OPENROUTER_BASE_URL
         self.model = Config.OPENROUTER_MODEL
+        # Last OpenRouter usage block, exposed for the supervisor's capacity
+        # budget (Think Big, Search Small, arXiv:2607.07548v1).
+        self.last_usage: Dict[str, Any] = {}
 
         self.system_prompt = """Generate 8-12 comprehensive Exa-optimized subqueries for deep research on the topic.
 
@@ -97,6 +100,9 @@ Notes:
                 )
                 response.raise_for_status()
                 result = response.json()
+
+                # Expose token usage for the supervisor's capacity budget.
+                self.last_usage = result.get("usage") or {}
 
                 # Extract the content from the response
                 content = result["choices"][0]["message"]["content"]

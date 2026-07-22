@@ -323,3 +323,37 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Capacity Budget
+
+Each report also carries a **Capacity Budget** — a per-run accounting of how
+compute was distributed across the pipeline's two roles. As the supervisor
+runs, it attributes token usage to the **delegation** role (the MiniMax-M2.1
+supervisor, which also synthesizes the report) and the **execution** role (the
+Gemini-backed planning and retrieval sub-agents), then appends a
+`## Capacity Budget` section reporting each role's spend, the delegation /
+execution split, and a downsizing verdict for the execution role.
+
+The budget is deterministic and parameter-free (it consumes the usage metadata
+the supervisor and sub-agents already produce), so it adds no API calls. It
+applies the recipe from *Think Big, Search Small: Where Capacity Matters in
+Hierarchical Search Agents?* (arXiv:2607.07548): capacity sensitivity is
+asymmetric — delegation is the bottleneck (~11 EM points when scaled) while
+execution is not (~2.6 points) — so capacity should be concentrated at
+delegation and execution downsized. When execution output is measured, the
+section quantifies the opportunity against the paper's reported ~37% sub-agent
+token reduction at matched accuracy. Mode 2 adapted port, where the paper's
+benchmark sweep and EM scoring are cut (evaluation belongs downstream) and its
+empirical capacity-sensitivity curve is replaced by the paper's own reported
+sensitivities applied as constants. Implementation lives in
+`src/agents/capacity_budget.py`.
+
+**Scope.** The paper's controlled capacity sweep across six model scales on
+five multi-hop QA benchmarks and its exact-match scoring are not reproduced
+here — that is a standalone benchmark suite. The 1.7B executor produced by
+quality-filtered trajectory distillation (finding #3) is also out of scope,
+since the distillation training pipeline cannot be hosted here; what is ported
+is the *recipe it implies* (execution can be downsized), quantified from the
+token usage this pipeline already records.
+
