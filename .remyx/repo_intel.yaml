@@ -41,7 +41,14 @@ observed_landing_zones:
       \ main.py via supervisor.research() on the end-of-turn report path"
     branch: agentkgv-agentic-llm-rag-framework-with-two-stage-training-f
     timestamp: '2026-07-21T05:08:10Z'
-  last_observed: '2026-07-21T05:08:10Z'
+  - arxiv: 2607.07548v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "SupervisorAgent.research() (reached from main.py: supervisor.research(query))\
+      \ \u2014 CapacityBudget is constructed in SupervisorAgent.__init__, populated\
+      \ via record_delegation/record_execution on each Mini"
+    branch: think-big-search-small-where-capacity-matters-in-hierarchica
+    timestamp: '2026-07-22T00:06:44Z'
+  last_observed: '2026-07-22T00:06:44Z'
 rejected_shapes: []
 coordination_signals: []
-last_updated: '2026-07-21T05:08:10Z'
+last_updated: '2026-07-22T00:06:44Z'
