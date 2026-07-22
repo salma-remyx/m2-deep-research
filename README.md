@@ -323,3 +323,43 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Recursive Deep-and-Wide Search
+
+The web search step is no longer a single wide pass. The **Web Search Retriever**
+now drives a recursive delegation tree over Exa: each planned subquery seeds a
+search node that couples a local objective with a *search mode* — `atom` (one
+precise lookup), `wide` (broad coverage), `deep` (drill into a top hit plus its
+neighbors), or `entity_collect` (gather everything about a named entity). A node
+runs its mode, then delegates `entity_collect` child nodes for the named-entity
+gaps its results surface, up to a recursion depth and a total Exa-call budget.
+Evidence aggregates and deduplicates upward, so a single subquery can fan out
+into specialized follow-up searches the planner never named — the depth the
+single-pass stage was missing.
+
+The tree first probes how task-relevant information is organized on the web (one
+wide search that surfaces dominant source domains and named entities) to ground
+which entities later nodes collect, and the `retrieve() -> findings` contract is
+preserved unchanged: every node returns `search_with_subqueries`-shaped buckets,
+so synthesis, the source capture into `last_search_results`, and the grounding
+auditor all keep working.
+
+Adapted from *WebSwarm: Recursive Multi-Agent Orchestration for Deep-and-Wide
+Web Search* (arXiv:2607.08662) — Mode 2 adapted port, where WebSwarm's LLM-driven
+delegation estimator is replaced by a parameter-free entity-gap heuristic (named
+entities surfaced in gathered results that no node has covered yet). The
+recursive delegation tree, the four search modes, the web-structure probe, and
+the upward evidence aggregation are kept at full fidelity. The substitution
+mirrors the auditor's parameter-free grounding proxy: deterministic, needs no
+extra API keys, and is unit-testable offline. Implementation lives in
+`src/agents/recursive_search.py`, wired in through
+`src/agents/web_search_retriever.py`.
+
+**Scope.** WebSwarm's "process-level experience reuse across homogeneous sibling
+nodes" is deliberately not ported — it is an efficiency optimization, not part of
+the core recursive-delegation mechanism. WebSwarm's own benchmark suites
+(BrowseComp-Plus, WideSearch, DeepWideSearch, GISA) are evaluation and belong in
+a downstream PR; this port ships the search mechanism itself.
+
+

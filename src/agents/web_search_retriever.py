@@ -5,6 +5,7 @@ import httpx
 from typing import Dict, Any, List
 from src.tools.exa_tool import ExaTool
 from src.utils.config import Config
+from src.agents.recursive_search import RecursiveSearchDelegator
 
 
 class WebSearchRetriever:
@@ -21,6 +22,11 @@ class WebSearchRetriever:
         self.model = Config.OPENROUTER_MODEL
         # Last set of raw search results gathered for an audit pass.
         self.last_search_results: List[Dict[str, Any]] = []
+        # Recursive deep-and-wide delegation over Exa search (WebSwarm,
+        # arXiv:2607.08662v1). Replaces the single-pass wide search while
+        # preserving the retrieve()->findings contract.
+        self.delegator = RecursiveSearchDelegator(self.exa)
+        self.use_recursive_search = True
 
         self.system_prompt = """You are a web search retrieval specialist.
 
@@ -100,6 +106,18 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
             })
 
         return all_results
+
+    def recursive_search(
+        self, research_query: str, subqueries: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Run recursive deep-and-wide delegation over the subqueries.
+
+        Delegates to :class:`~src.agents.recursive_search.RecursiveSearchDelegator`
+        (WebSwarm, arXiv:2607.08662v1) and returns evidence buckets in the same
+        shape as :meth:`search_with_subqueries`, so synthesis and the grounding
+        auditor are unaffected.
+        """
+        return self.delegator.delegate(research_query, subqueries)
 
     def synthesize_findings(
         self,
@@ -206,8 +224,16 @@ Be thorough and detailed - this will feed into a comprehensive research report."
             if not subqueries:
                 return "Error: No subqueries provided"
 
-            # Execute searches
-            search_results = self.search_with_subqueries(subqueries)
+            # Execute searches. Recursive deep-and-wide delegation (WebSwarm,
+            # arXiv:2607.08662v1) replaces the single-pass wide search; it
+            # falls back to that single pass if the delegator is unavailable.
+            if self.use_recursive_search:
+                try:
+                    search_results = self.recursive_search(research_query, subqueries)
+                except Exception:
+                    search_results = self.search_with_subqueries(subqueries)
+            else:
+                search_results = self.search_with_subqueries(subqueries)
             # Expose raw results for the supervisor's grounding auditor.
             self.last_search_results = search_results
 
