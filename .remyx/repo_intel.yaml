@@ -57,6 +57,12 @@ observed_landing_zones:
     branch: webswarm-recursive-multi-agent-orchestration-for-deep-and-wi
     timestamp: '2026-07-22T20:37:39Z'
   last_observed: '2026-07-22T20:37:39Z'
-rejected_shapes: []
+rejected_shapes:
+- shape_tag: null
+  reason_code: null
+  reason_summary: ''
+  observed:
+  - arxiv: 2607.09175v1
+    timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-22T20:37:39Z'
+last_updated: '2026-07-23T15:29:39Z'
