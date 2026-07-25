@@ -7,6 +7,7 @@ from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
+from src.agents.evidence_stressor import EvidenceStressor
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -33,6 +34,8 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # DeepStress evidence-robustness probe (opt-in; not used by research()).
+        self.evidence_stressor = EvidenceStressor()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -391,6 +394,28 @@ Research Workflow:
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
+
+    def stress_test_grounding(
+        self,
+        research_query: str,
+        challenge_rate: float = 0.5,
+        seed: int = 0,
+    ) -> Any:
+        """Probe the grounding auditor's robustness to poor-quality evidence.
+
+        Adapted from DeepStress (arXiv:2607.13920v1): inject a controlled
+        fraction of challenging evidence (trustworthiness / relevance /
+        factuality) alongside this run's gathered sources and report how many
+        injected challenges the grounding auditor catches. Opt-in diagnostic --
+        never called from the normal :meth:`research` loop.
+        """
+        return self.evidence_stressor.probe(
+            self.auditor,
+            self._gathered_sources,
+            research_query,
+            challenge_rate=challenge_rate,
+            seed=seed,
+        )
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """

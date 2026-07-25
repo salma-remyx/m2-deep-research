@@ -323,3 +323,36 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Evidence Stress Test
+
+Alongside the grounding audit, the supervisor exposes an opt-in **evidence
+stress test** that probes how robustly the grounding auditor handles
+poor-quality evidence. It injects a controlled fraction of challenging sources
+along the three document-reliability dimensions — *trustworthiness*
+(fabricated URLs), *relevance* (off-topic text), and *factuality* (conflicting
+numbers) — alongside a run's gathered sources, then reports how many injected
+challenges the auditor catches. Run it as a diagnostic after a research run:
+
+```python
+report = supervisor.stress_test_grounding("your research query", challenge_rate=0.5)
+print(report.detection_by_dimension(), report.detection_rate)
+```
+
+The stressor is deterministic and parameter-free (seeded templates keyed off
+the clean sources), so it adds no API calls. Adapted from *DeepStress:
+Stress-Testing Deep Search Agents* (arXiv:2607.13920) — Mode 2 adapted port,
+where DeepStress's full benchmark harness and whole-retrieval-module
+replacement are cut, and its controlled challenging-evidence rate is applied
+to this pipeline's own auditor over its captured sources. Implementation lives
+in `src/agents/evidence_stressor.py`.
+
+**Scope.** DeepStress replaces retrieval and runs QA benchmarks across several
+search agents; this port only augments the gathered source set and probes the
+existing auditor. An honest finding the probe surfaces: because the auditor is
+a lexical grounding proxy, it catches fabricated URLs and off-topic claims but
+cannot detect a factuality conflict — a claim that reuses a clean source's
+words with one number flipped reads as grounded. That blind spot is itself the
+kind of parametric-vs-retrieved conflict DeepStress is designed to expose.
+
