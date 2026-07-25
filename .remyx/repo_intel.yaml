@@ -56,7 +56,14 @@ observed_landing_zones:
       \ entry) via supervisor.research(query)."
     branch: webswarm-recursive-multi-agent-orchestration-for-deep-and-wi
     timestamp: '2026-07-22T20:37:39Z'
-  last_observed: '2026-07-22T20:37:39Z'
+  - arxiv: 2607.13920v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "(none in the product \u2014 wired only to the new opt-in\
+      \ SupervisorAgent.stress_test_grounding(); main.py:103 calls research() but\
+      \ never the probe)"
+    branch: deepstress-stress-testing-deep-search-agents
+    timestamp: '2026-07-25T02:48:00Z'
+  last_observed: '2026-07-25T02:48:00Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -65,4 +72,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-23T15:29:39Z'
+last_updated: '2026-07-25T02:48:00Z'
