@@ -63,7 +63,14 @@ observed_landing_zones:
       \ never the probe)"
     branch: deepstress-stress-testing-deep-search-agents
     timestamp: '2026-07-25T02:48:00Z'
-  last_observed: '2026-07-25T02:48:00Z'
+  - arxiv: 2607.21461v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent.research() (driven by the top-level main.py
+      entry point) -> _audit_report -> _refine_from_audit; AuditRefineLoop is constructed
+      in SupervisorAgent.__init__ and invoked via refine_loop.
+    branch: arex-towards-a-recursively-self-improving-agent-for-deep-res
+    timestamp: '2026-07-26T13:12:55Z'
+  last_observed: '2026-07-26T13:12:55Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -72,4 +79,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-25T02:48:00Z'
+last_updated: '2026-07-26T13:12:55Z'
