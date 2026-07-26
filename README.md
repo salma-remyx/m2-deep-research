@@ -323,3 +323,32 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Recursive Report Refinement
+
+After the grounding auditor flags a report's gaps, the supervisor runs an
+**outer self-improvement loop** that *acts on* them rather than only reporting
+them: each unsupported claim is turned into a focused follow-up subquery, the
+web search retriever is dispatched to gather fresh evidence for it, and the
+newly gathered sources are merged back into the report. A
+`## Targeted Follow-up Research` section records what was targeted and found.
+
+The loop is parameter-free on the decision side — the existing `AuditResult`
+already encodes the "improvement state" (unsupported claims are the unresolved
+constraints, grounded citations are the verified evidence), so no extra model
+or API key is needed beyond the retriever's own Exa/OpenRouter calls. Adapted
+from *AREX: Towards a Recursively Self-Improving Agent for Deep Research*
+(arXiv:2607.21461) — Mode 2 adapted port, where AREX's learned context-update
+tool and learned targeted-query generator are replaced by parameter-free
+proxies (the audit result as the improvement state; salient-claim terms as the
+derived subquery).
+
+**Scope.** AREX's agentic mid-training and long-horizon reinforcement learning,
+and its dense 4B / 122B-A10B model instantiation, are training-time machinery
+this inference-time pipeline does not host; only AREX's inference-time
+audit->refine loop is ported, as a single bounded follow-up pass. Recursion is
+capped at one refinement round per report. Implementation lives in
+`src/agents/audit_refine_loop.py`, wired into `SupervisorAgent._audit_report`.
+
+

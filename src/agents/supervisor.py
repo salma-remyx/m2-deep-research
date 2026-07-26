@@ -6,8 +6,9 @@ from rich.console import Console
 from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
-from src.agents.auditor import ReportAuditor
+from src.agents.auditor import AuditResult, ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.audit_refine_loop import AuditRefineLoop
 
 # Initialize rich console
 console = Console()
@@ -33,6 +34,9 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # AREX outer self-improvement loop: act on the audit's gaps with
+        # targeted follow-up research (Mode 2 adapted port, arXiv:2607.21461v1).
+        self.refine_loop = AuditRefineLoop()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -297,7 +301,7 @@ Research Workflow:
                     # Model has finished - extract final response
                     final_text = self._extract_text_from_content(response.content)
                     # BrainPilot-style grounding audit before returning the report.
-                    final_text = self._audit_report(final_text)
+                    final_text = self._audit_report(final_text, research_query=query)
                     # Append the Graph of Trace so the workflow travels with it.
                     self.trace.record_report(final_text)
                     final_text += self.trace.render()
@@ -369,7 +373,7 @@ Research Workflow:
 
         return "\n\n".join(text_parts) if text_parts else "No text content in response."
 
-    def _audit_report(self, report: str) -> str:
+    def _audit_report(self, report: str, research_query: str = "") -> str:
         """Run a grounding audit on the final report and append the findings.
 
         Inspired by BrainPilot's Auditor agent (arXiv:2607.15079v1): an
@@ -378,6 +382,10 @@ Research Workflow:
         retriever, so fabricated citations surface before the report ships.
         Auditing never blocks delivery -- on any error the report is returned
         unchanged.
+
+        When the audit surfaces unsupported claims, the AREX outer
+        self-improvement loop (arXiv:2607.21461v1) dispatches targeted
+        follow-up research to resolve them before the report ships.
         """
         try:
             result = self.auditor.audit(report, self._gathered_sources)
@@ -387,10 +395,42 @@ Research Workflow:
                 f"({len(result.unsupported_claims)} unsupported claim(s)) "
                 f"against {result.sources_checked} source(s)."
             )
-            return report + "\n" + self.auditor.format_report(result)
+            audited = report + "\n" + self.auditor.format_report(result)
+            # AREX: close the audit -> refine loop over the flagged gaps.
+            audited = self._refine_from_audit(audited, result, research_query)
+            return audited
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
+
+    def _refine_from_audit(
+        self, report: str, result: AuditResult, research_query: str
+    ) -> str:
+        """AREX outer self-improvement loop: resolve the audit's gaps.
+
+        Derives targeted follow-up subqueries from the audit's unsupported
+        claims, dispatches them through the web search retriever, merges the
+        freshly gathered evidence back, and appends a section documenting what
+        was followed up. Best-effort and bounded -- a failure or a clean audit
+        leaves the report unchanged.
+        """
+        outcome = self.refine_loop.run(
+            audit_result=result,
+            research_query=research_query,
+            retriever=self.web_search_retriever,
+            sources=self._gathered_sources,
+        )
+        if not outcome.ran:
+            return report
+        # Fold the new evidence into the gathered set so it travels with the
+        # report (and a future re-audit could verify against it).
+        self._gathered_sources = list(self._gathered_sources) + outcome.new_sources
+        console.print(
+            f"[bold green]✓ AREX refine:[/bold green] dispatched "
+            f"{len(outcome.followup_subqueries)} targeted follow-up search(es), "
+            f"gathered {len(outcome.new_sources)} new source(s)."
+        )
+        return report + self.refine_loop.format_outcome(outcome)
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """
