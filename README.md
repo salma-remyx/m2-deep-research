@@ -323,3 +323,26 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Lost-in-the-Middle Resurfacing
+
+Before the web search retriever synthesizes findings, a **middle resurfacer**
+reorders the retrieved sources so the most query-relevant ones sit at the
+*start and end* of each subquery block (the positions long-context models attend
+to) and restates the top sources in a `Key sources` preamble at the very front
+of the context. This counteracts the *lost-in-the-middle* effect, where sources
+buried in the middle of the stuffed Exa context get under-cited.
+
+The resurfacer is deterministic and parameter-free — relevance is a
+lexical-overlap score between the research query and each result's text, with a
+boost for results carrying retriever highlights — so it adds no API calls and
+runs on every synthesis. No source is dropped; the score only decides ordering.
+Adapted from *Lost-in-the-Middle in Long-Text Generation: Synthetic Dataset,
+Evaluation Framework, and Mitigation* (RAL-Writer, arXiv:2503.06868) — Mode 2
+adapted port, where RAL-Writer's learned importance estimator is replaced by
+the lexical-overlap proxy and its restatement generator by the deterministic
+key-sources preamble. The paper's LongInOutBench benchmark is not reproduced;
+only the inference-time mitigation is ported. Implementation lives in
+`src/agents/middle_resurfacer.py`.
+
