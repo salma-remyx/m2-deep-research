@@ -70,7 +70,14 @@ observed_landing_zones:
       in SupervisorAgent.__init__ and invoked via refine_loop.
     branch: arex-towards-a-recursively-self-improving-agent-for-deep-res
     timestamp: '2026-07-26T13:12:55Z'
-  last_observed: '2026-07-26T13:12:55Z'
+  - arxiv: 2503.06868v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "WebSearchRetriever.synthesize_findings() in src/agents/web_search_retriever.py\
+      \ \u2014 invoked before the Gemini synthesis context is assembled; reached via\
+      \ WebSearchRetriever.retrieve() <- SupervisorAgent "
+    branch: lost-in-the-middle-in-long-text-generation-synthetic-dataset
+    timestamp: '2026-07-28T01:04:26Z'
+  last_observed: '2026-07-28T01:04:26Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -79,4 +86,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-26T13:12:55Z'
+last_updated: '2026-07-28T01:04:26Z'
