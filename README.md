@@ -346,3 +346,17 @@ key-sources preamble. The paper's LongInOutBench benchmark is not reproduced;
 only the inference-time mitigation is ported. Implementation lives in
 `src/agents/middle_resurfacer.py`.
 
+### Refinement: position-aware restatement
+
+Key-source selection for the restatement preamble now ports RAL-Writer's exact
+U-shaped position penalty (`exp_func(x) = |b·(2(x−0.5))^a|`, a=60, b=0.3, from
+the authors' `position_func.py`): each source's relevance score is discounted
+by its position in the *original* retrieved sequence, so important sources that
+sat buried in the middle of the context are restated ahead of equally relevant
+sources that were already at an attended edge — the paper's core
+retrieve-and-restate mechanism, with the lexical score standing in for the
+official embedding similarity. Edge-reordering now also covers each subquery's
+`similar_results`, which are included in the synthesis context as a compact
+"Related sources" list (they were previously retrieved but never sent to the
+synthesizer).
+

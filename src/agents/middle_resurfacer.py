@@ -17,25 +17,39 @@ which stuffs dozens of Exa excerpts into a single Gemini context:
   retriever already flagged with highlights. It needs no model access and is
   fully deterministic, so it runs on every synthesis and is unit-testable
   offline.
+* RAL-Writer's embedding-similarity chunk ranking is reproduced with the
+  lexical proxy standing in for the embedding similarity, while its **U-shaped
+  position penalty is ported exactly** (``exp_func(x) = |b * (2(x - 0.5))^a|``
+  with ``a=60``, ``b=0.3``, from the official ``position_func.py``): candidates
+  for restatement are ranked by ``relevance - position_penalty``, so the
+  restatement budget deliberately goes to important content that sat in the
+  *middle* of the original context -- the chunks that would otherwise be
+  lost-in-the-middle -- rather than to content already at an attended edge.
 * RAL-Writer's learned restatement generator is replaced by a deterministic
-  **"Key sources" preamble** that restates the globally most relevant sources
-  at the very front of the context.
+  **"Key sources" preamble** that restates those position-penalty-selected
+  sources at the very front of the context.
 
-**Core mechanism preserved (the lost-in-the-middle fix).** Two moves, both
+**Core mechanism preserved (the lost-in-the-middle fix).** Three moves, all
 inference-time and training-free: (1) **edge-reorder** -- within each subquery
-block, results are reordered so the most query-relevant sit at the *start and
-end* of the block (the positions long-context models attend to) and the least
-relevant are pushed to the *middle*; and (2) **restate** -- a ``Key sources``
-preamble explicitly restates the top sources up front so important content is
-never buried, regardless of its original position. Together they surface and
-restate the content that would otherwise be lost-in-the-middle.
+block (both ``results`` and ``similar_results``), results are reordered so the
+most query-relevant sit at the *start and end* of the block (the positions
+long-context models attend to) and the least relevant are pushed to the
+*middle*; (2) **position-aware selection** -- restatement candidates are ranked
+by relevance minus the paper's U-shaped position penalty over their *original*
+sequence positions, exactly the signal RAL-Writer uses to find important yet
+overlooked content; and (3) **restate** -- a ``Key sources`` preamble
+explicitly restates those sources up front so important content is never
+buried, regardless of its original position.
 
 **Scope of the port.** Only the *inference-time mitigation* is ported. The
 paper's LongInOutBench benchmark suite and its synthetic long-input/long-output
 dataset are not reproduced -- evaluation belongs in a downstream PR. The
-importance signal is a lexical-overlap proxy, not a learned estimator, so it
-approximates rather than replicates the paper's importance ranking. The score
-is only used to decide *ordering*; every retrieved source stays in context.
+importance signal is a lexical-overlap proxy, not an embedding-similarity
+estimator, so it approximates rather than replicates the paper's relevance
+ranking (the position penalty itself is ported at full fidelity). RAL-Writer's
+plan-then-write loop with per-step retrieval is collapsed to this pipeline's
+single-shot synthesis call. The score is only used to decide *ordering* and
+*restatement*; every retrieved source stays in context.
 """
 
 import re
@@ -44,6 +58,29 @@ from typing import Any, Dict, Iterable, List, Sequence, Set, Tuple
 
 # Tokens of >= 3 lowercase alphanumeric chars (drops punctuation/short noise).
 _TOKEN_RE = re.compile(r"[a-z0-9]{3,}")
+
+# U-shaped position-penalty constants from RAL-Writer's RestateAgent
+# (src/agent/utils/position_func.py and src/agent/restate.py).
+POSITION_PENALTY_A = 60.0
+POSITION_PENALTY_B = 0.3
+
+
+def position_penalty(
+    position: float,
+    a: float = POSITION_PENALTY_A,
+    b: float = POSITION_PENALTY_B,
+) -> float:
+    """U-shaped position penalty for a normalized sequence position in [0, 1].
+
+    Ports the paper's ``exp_func(x) = |b * (2(x - 0.5))^a|`` (a=60, b=0.3): the
+    penalty is ~0 through the middle of the context and rises sharply to ``b``
+    at the edges. Subtracting it from a relevance score therefore *boosts*
+    middle-positioned content for restatement -- the content long-context
+    models under-attend to. (``abs`` on the base is equivalent to the paper's
+    outer ``abs`` for the even exponent and avoids negative-base powers.)
+    """
+    x = min(1.0, max(0.0, position))
+    return b * abs(2.0 * (x - 0.5)) ** a
 
 # Common words ignored when scoring relevance, so superficial keyword overlap
 # does not read as "important".
@@ -134,27 +171,32 @@ class MiddleResurfacer:
         Args:
             query: The research query the results were retrieved for.
             search_results: Nested subquery buckets from ``WebSearchRetriever``
-                (each carrying a ``results`` list).
+                (each carrying ``results`` and ``similar_results`` lists).
 
         Returns:
             A :class:`ResurfacedContext` with edge-reordered buckets (mirroring
             the input structure) and a ``Key sources`` preamble restating the
-            globally most relevant, de-duplicated sources.
+            most relevant, de-duplicated sources, selected by relevance minus
+            the paper's U-shaped position penalty so important-but-middle
+            sources are restated first.
         """
         buckets: List[Dict[str, Any]] = []
-        global_scored: List[Tuple[float, Dict[str, Any]]] = []
+        # Restatement candidates in their ORIGINAL sequence order -- the
+        # positions at which content would actually have been buried, which is
+        # what the position penalty must measure (not the post-reorder order).
+        original_order: List[Tuple[float, Dict[str, Any]]] = []
         for bucket in search_results:
             if not isinstance(bucket, dict):
                 continue
-            results = bucket.get("results") or []
-            scored = [(self.score(query, r), r) for r in results if isinstance(r, dict)]
-            reordered = self.reorder_to_edges(scored)
             new_bucket = dict(bucket)
-            new_bucket["results"] = reordered
+            for key in ("results", "similar_results"):
+                items = [r for r in (bucket.get(key) or []) if isinstance(r, dict)]
+                scored = [(self.score(query, r), r) for r in items]
+                new_bucket[key] = self.reorder_to_edges(scored)
+                original_order.extend(scored)
             buckets.append(new_bucket)
-            global_scored.extend(scored)
 
-        key_sources = self._top_sources(global_scored)
+        key_sources = self._top_sources(self._restatement_scores(original_order))
         preamble = self._format_preamble(key_sources)
         return ResurfacedContext(
             reordered_search_results=buckets,
@@ -164,8 +206,24 @@ class MiddleResurfacer:
 
     # -- internals ---------------------------------------------------------
 
+    def _restatement_scores(
+        self, scored: Sequence[Tuple[float, Dict[str, Any]]]
+    ) -> List[Tuple[float, Dict[str, Any]]]:
+        """Relevance minus the U-shaped position penalty (the paper's ranking).
+
+        Positions are normalized over the original sequence order, so an
+        important source that sat in the middle of the context outranks an
+        equally relevant source that was already at an attended edge.
+        """
+        n = len(scored)
+        adjusted: List[Tuple[float, Dict[str, Any]]] = []
+        for i, (relevance, item) in enumerate(scored):
+            x = i / (n - 1) if n > 1 else 0.5
+            adjusted.append((relevance - position_penalty(x), item))
+        return adjusted
+
     def _top_sources(self, scored: Sequence[Tuple[float, Dict[str, Any]]]) -> List[Dict[str, Any]]:
-        """Globally most-relevant sources, de-duplicated by URL (stable order)."""
+        """Top restatement candidates, de-duplicated by URL (stable order)."""
         ranked = sorted(scored, key=lambda pair: -pair[0])
         seen: Set[str] = set()
         top: List[Dict[str, Any]] = []
