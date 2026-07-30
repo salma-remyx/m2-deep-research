@@ -323,3 +323,34 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Cross-Component Prompt Adaptation
+
+After the grounding auditor runs, the supervisor applies **cross-component
+prompt adaptation**: it turns the auditor's structured critique (ungrounded
+citations and unsupported claims) into concrete feedback that updates the
+*upstream* planning agent's prompt and is injected back into the supervisor
+conversation, then re-enters the research loop so the next planning / retrieval
+pass closes those gaps. The loop early-stops as soon as the audit is clean, and
+caps itself at two refinement iterations. This closes the loop the auditor
+opened: where the auditor only *reported* grounding gaps, adaptation now
+*acts* on them.
+
+The adapter is deterministic and parameter-free — it distills the unsupported
+claims into focused re-query topics and an advisory planning-prompt block — so
+it adds no API calls. Adapted from **GRADRAG: Cross-Component Prompt Adaptation
+for Coordinated Multi-Agent RAG** (arXiv:2607.21324) — Mode 2 adapted port,
+where GRADRAG's Evaluator is supplied by this pipeline's existing grounding
+auditor, and its LLM Prompt Optimizer is replaced by the parameter-free
+adaptation proxy. Implementation lives in `src/agents/prompt_adaptation.py`,
+wired into `SupervisorAgent.research()`.
+
+**Scope.** GRADRAG models the full RAG pipeline as a computational graph and
+propagates feedback to retrievers, graph constructors, and answerers; this port
+propagates the auditor's feedback to the pipeline's adaptive planning agent (the
+subquery generator that drives retrieval) and to the supervisor. GRADRAG's
+SQUALITY / QMSUM benchmark suite and LLM pairwise-judge evaluation are
+deliberately not ported — evaluation belongs in a downstream PR, and here the
+auditor's grounding score is the in-loop signal that drives early stopping.
+

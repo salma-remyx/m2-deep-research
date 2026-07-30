@@ -6,7 +6,8 @@ from rich.console import Console
 from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
-from src.agents.auditor import ReportAuditor
+from src.agents.auditor import AuditResult, ReportAuditor
+from src.agents.prompt_adaptation import PromptAdapter
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -33,6 +34,13 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # GRADRAG cross-component prompt adapter: turns the auditor's AuditResult
+        # (the Evaluator) into upstream prompt updates + an early-stop decision.
+        self.prompt_adapter = PromptAdapter()
+        self.last_audit_result: AuditResult = AuditResult()
+        # Adaptive planning prompt is rebuilt from this base on each refinement.
+        self._base_planning_prompt: str = self.planning_agent.system_prompt
+        self._refinement_iteration: int = 0
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -257,6 +265,11 @@ Research Workflow:
             }
         ]
 
+        # Reset GRADRAG refinement state so prior runs don't leak adapted prompts.
+        self._refinement_iteration = 0
+        self.last_audit_result = AuditResult()
+        self.planning_agent.system_prompt = self._base_planning_prompt
+
         # Start a fresh Graph of Trace rooted at this research subgoal.
         self.trace.reset()
         self.trace.record_subgoal(query)
@@ -298,10 +311,25 @@ Research Workflow:
                     final_text = self._extract_text_from_content(response.content)
                     # BrainPilot-style grounding audit before returning the report.
                     final_text = self._audit_report(final_text)
-                    # Append the Graph of Trace so the workflow travels with it.
-                    self.trace.record_report(final_text)
-                    final_text += self.trace.render()
-                    return final_text
+                    # GRADRAG cross-component prompt adaptation: propagate the
+                    # audit (Evaluator) into upstream prompts and early-stop when
+                    # grounding is clean; otherwise refine once more.
+                    directive = self._adapt_from_audit(self._refinement_iteration)
+                    if directive.should_stop:
+                        console.print(f"[dim][GRADRAG] {directive.reason}[/dim]")
+                        # Append the Graph of Trace so the workflow travels with it.
+                        self.trace.record_report(final_text)
+                        final_text += self.trace.render()
+                        return final_text
+                    self._refinement_iteration += 1
+                    console.print(
+                        f"[bold magenta][GRADRAG refinement "
+                        f"{self._refinement_iteration}][/bold magenta] "
+                        f"{directive.reason} - adapting upstream prompts."
+                    )
+                    self._apply_prompt_adaptation(directive)
+                    # Loop continues: the next turn sees the adapted prompts and
+                    # feedback message, and re-plans / re-searches to close gaps.
 
                 elif response.stop_reason == "tool_use":
                     # Model wants to use tools - execute them
@@ -381,6 +409,8 @@ Research Workflow:
         """
         try:
             result = self.auditor.audit(report, self._gathered_sources)
+            # Expose the audit so the GRADRAG adapter can propagate it upstream.
+            self.last_audit_result = result
             console.print(
                 f"[bold green]✓ Auditor:[/bold green] {result.grounded_citations}/"
                 f"{result.total_citations} citations grounded "
@@ -391,6 +421,25 @@ Research Workflow:
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
+
+    def _adapt_from_audit(self, refinement: int):
+        """GRADRAG Prompt Optimizer + early-stop: last AuditResult -> directive."""
+        return self.prompt_adapter.adapt(self.last_audit_result, refinement)
+
+    def _apply_prompt_adaptation(self, directive):
+        """Propagate evaluator feedback to the adaptive planning agent + supervisor turn."""
+        advisory = self.prompt_adapter.planning_advisory(directive)
+        if advisory:
+            self.planning_agent.system_prompt = self._base_planning_prompt + advisory
+        self.messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Grounding audit feedback (cross-component prompt "
+                    "adaptation):\n" + directive.feedback
+                ),
+            }
+        )
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """
