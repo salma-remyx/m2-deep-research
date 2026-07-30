@@ -84,7 +84,14 @@ observed_landing_zones:
       \ PromptAdapter is constructed in SupervisorAgent.__ini"
     branch: gradrag-cross-component-prompt-adaptation-for-coordinated-mu
     timestamp: '2026-07-30T01:06:37Z'
-  last_observed: '2026-07-30T01:06:37Z'
+  - arxiv: 2607.16133v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent.research() in src/agents/supervisor.py, reached
+      from the top-level main.py CLI (SupervisorAgent() at main.py:92, supervisor.research()
+      at main.py:103). The new RelayFlowAnalyzer runs t
+    branch: when-do-multi-agent-systems-help-an-information-bottleneck-p
+    timestamp: '2026-07-30T17:56:54Z'
+  last_observed: '2026-07-30T17:56:54Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -93,4 +100,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-30T01:06:37Z'
+last_updated: '2026-07-30T17:56:54Z'
