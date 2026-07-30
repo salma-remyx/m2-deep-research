@@ -77,7 +77,14 @@ observed_landing_zones:
       \ WebSearchRetriever.retrieve() <- SupervisorAgent "
     branch: lost-in-the-middle-in-long-text-generation-synthetic-dataset
     timestamp: '2026-07-28T01:04:26Z'
-  last_observed: '2026-07-28T01:04:26Z'
+  - arxiv: 2607.21324v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "SupervisorAgent.research() \u2014 the end_turn branch of\
+      \ its research loop, reached via the main.py CLI (run_research() -> supervisor.research(query));\
+      \ PromptAdapter is constructed in SupervisorAgent.__ini"
+    branch: gradrag-cross-component-prompt-adaptation-for-coordinated-mu
+    timestamp: '2026-07-30T01:06:37Z'
+  last_observed: '2026-07-30T01:06:37Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -86,4 +93,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-28T01:04:26Z'
+last_updated: '2026-07-30T01:06:37Z'
