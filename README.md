@@ -323,3 +323,43 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Multi-Agent Coordination Analysis
+
+Each report also carries a **coordination analysis** that takes an
+information-bottleneck view of the run's multi-agent relays. The supervisor →
+planning agent → web search retriever → report chain exchanges information only
+through *bounded relay* messages, so the analysis asks the question posed in
+*When Do Multi-Agent Systems Help? An Information Bottleneck Perspective*:
+did this run's context reduction outweigh its relay information loss? It
+reconstructs the relay chain from the Graph of Trace, measures how much
+gathered source text the bounded relays kept out of the supervisor's shared
+context (a character-based **context-reduction benefit**) against how much
+gathered evidence never surfaced in the report (an evidence-based **relay
+information loss**), combines them into an effective balance (the paper's
+`beta`), and appends a `## Multi-Agent Coordination Analysis` section flagging
+the run as favorable, balanced, or lossy.
+
+The analyzer is deterministic and parameter-free (it reads the trace plus the
+sources and report the supervisor already has), so it adds no API calls. It
+complements the grounding auditor: the auditor checks whether the report's
+citations are *grounded* in retrieved sources (precision), while this analysis
+measures how much gathered evidence *flowed through* the relays into the report
+(recall) — the recall direction is what the paper's relay-sufficiency finding
+turns on. Adapted from *When Do Multi-Agent Systems Help? An Information
+Bottleneck Perspective* (arXiv:2607.16133) — Mode 2 adapted port, where the
+paper's theoretical `beta` and benchmark episode-accounting are replaced by a
+parameter-free per-run diagnostic, and its "infinite-bandwidth" single-agent
+baseline by an evidence-retention proxy.
+
+**Scope.** The two bottleneck axes are deliberately measured in different
+units — context reduction as character compression, information loss as a
+fraction of gathered sources dropped — because measuring both off the same
+count would collapse them into one number. Both are proxies: the reduction
+benefit approximates the transmission cost the bounded relays avoided with raw
+source-text size versus report size, and the model-capability term the paper's
+`beta` depends on is surfaced only as the supervisor model name, not measured.
+Implementation lives in `src/agents/relay_flow.py`.
+
+

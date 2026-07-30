@@ -8,6 +8,7 @@ from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.relay_flow import RelayFlowAnalyzer
 
 # Initialize rich console
 console = Console()
@@ -33,6 +34,8 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # Information-bottleneck view of the multi-agent relay chain.
+        self.relay_flow = RelayFlowAnalyzer()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -300,6 +303,8 @@ Research Workflow:
                     final_text = self._audit_report(final_text)
                     # Append the Graph of Trace so the workflow travels with it.
                     self.trace.record_report(final_text)
+                    # Information-bottleneck view of the multi-agent relays.
+                    final_text = self._analyze_coordination(final_text)
                     final_text += self.trace.render()
                     return final_text
 
@@ -390,6 +395,32 @@ Research Workflow:
             return report + "\n" + self.auditor.format_report(result)
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
+            return report
+
+    def _analyze_coordination(self, report: str) -> str:
+        """Run an information-bottleneck analysis of the relays and append it.
+
+        Adapted from *When Do Multi-Agent Systems Help? An Information
+        Bottleneck Perspective* (arXiv:2607.16133v1): it treats the
+        supervisor->planner->retriever->report chain as bounded relays and asks
+        whether this run's context reduction outweighed its relay information
+        loss. Analysis never blocks delivery -- on any error the report is
+        returned unchanged.
+        """
+        try:
+            result = self.relay_flow.analyze(
+                self.trace, self._gathered_sources, report, model_name=self.model
+            )
+            console.print(
+                f"[bold green]✓ Coordination:[/bold green] effective beta "
+                f"{result.effective_beta:+.2f} "
+                f"({'favorable' if result.favorable else 'lossy'}), "
+                f"{result.n_sources_retained}/{result.n_sources_gathered} "
+                f"gathered sources retained."
+            )
+            return report + "\n" + self.relay_flow.format_report(result)
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Coordination analysis skipped: {exc}[/dim]")
             return report
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
