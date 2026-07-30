@@ -323,3 +323,40 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Lost-in-the-Middle Resurfacing
+
+Before the web search retriever synthesizes findings, a **middle resurfacer**
+reorders the retrieved sources so the most query-relevant ones sit at the
+*start and end* of each subquery block (the positions long-context models attend
+to) and restates the top sources in a `Key sources` preamble at the very front
+of the context. This counteracts the *lost-in-the-middle* effect, where sources
+buried in the middle of the stuffed Exa context get under-cited.
+
+The resurfacer is deterministic and parameter-free — relevance is a
+lexical-overlap score between the research query and each result's text, with a
+boost for results carrying retriever highlights — so it adds no API calls and
+runs on every synthesis. No source is dropped; the score only decides ordering.
+Adapted from *Lost-in-the-Middle in Long-Text Generation: Synthetic Dataset,
+Evaluation Framework, and Mitigation* (RAL-Writer, arXiv:2503.06868) — Mode 2
+adapted port, where RAL-Writer's learned importance estimator is replaced by
+the lexical-overlap proxy and its restatement generator by the deterministic
+key-sources preamble. The paper's LongInOutBench benchmark is not reproduced;
+only the inference-time mitigation is ported. Implementation lives in
+`src/agents/middle_resurfacer.py`.
+
+### Refinement: position-aware restatement
+
+Key-source selection for the restatement preamble now ports RAL-Writer's exact
+U-shaped position penalty (`exp_func(x) = |b·(2(x−0.5))^a|`, a=60, b=0.3, from
+the authors' `position_func.py`): each source's relevance score is discounted
+by its position in the *original* retrieved sequence, so important sources that
+sat buried in the middle of the context are restated ahead of equally relevant
+sources that were already at an attended edge — the paper's core
+retrieve-and-restate mechanism, with the lexical score standing in for the
+official embedding similarity. Edge-reordering now also covers each subquery's
+`similar_results`, which are included in the synthesis context as a compact
+"Related sources" list (they were previously retrieved but never sent to the
+synthesizer).
+

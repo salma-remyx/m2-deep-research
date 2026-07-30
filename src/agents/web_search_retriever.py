@@ -3,6 +3,7 @@
 import json
 import httpx
 from typing import Dict, Any, List
+from src.agents.middle_resurfacer import MiddleResurfacer
 from src.tools.exa_tool import ExaTool
 from src.utils.config import Config
 
@@ -116,9 +117,17 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
         Returns:
             Synthesized findings as a string
         """
-        # Prepare context from search results
-        context_parts = []
-        for result_set in search_results:
+        # Resurface important-but-middle content (lost-in-the-middle mitigation)
+        # before building the context: edge-reorder each subquery block and
+        # restate up front the sources selected by relevance minus the paper's
+        # U-shaped position penalty. Adapted from RAL-Writer (arXiv:2503.06868);
+        # see src/agents/middle_resurfacer.py.
+        resurfacer = MiddleResurfacer()
+        resurfaced = resurfacer.resurface(research_query, search_results)
+
+        # Prepare context from search results (edge-reordered, key sources up front)
+        context_parts = [resurfaced.preamble] if resurfaced.preamble else []
+        for result_set in resurfaced.reordered_search_results:
             subquery = result_set.get("subquery", "")
             results = result_set.get("results", [])
 
@@ -136,6 +145,20 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
                     context_parts.append(f"Highlights: {', '.join(highlights[:5])}")  # More highlights
                 if text_excerpt:
                     context_parts.append(f"Excerpt: {text_excerpt}...")
+
+            # Include the edge-reordered similar_results (previously retrieved
+            # but never sent to the synthesizer) so they are part of the
+            # position-aware context rather than silently dropped.
+            similar = result_set.get("similar_results", [])
+            if similar:
+                context_parts.append("\n#### Related sources")
+                for sim in similar[:5]:
+                    sim_title = sim.get("title", "No title")
+                    sim_url = sim.get("url", "")
+                    sim_highlights = sim.get("highlights", [])
+                    context_parts.append(f"- {sim_title} — {sim_url}")
+                    if sim_highlights:
+                        context_parts.append(f"  Highlights: {', '.join(sim_highlights[:3])}")
 
         context = "\n".join(context_parts)
 
