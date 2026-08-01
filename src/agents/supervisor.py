@@ -1,13 +1,14 @@
 """Supervisor Agent using Minimax M2.1 with interleaved thinking."""
 
 import anthropic
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from rich.console import Console
 from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.efficiency_meter import EfficiencyMeter
 
 # Initialize rich console
 console = Console()
@@ -35,8 +36,12 @@ class SupervisorAgent:
         self.auditor = ReportAuditor()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
+        # Budget-to-reward efficiency meter (AREK-style search efficiency).
+        self.efficiency_meter = EfficiencyMeter()
         # Sources captured from the retriever for the post-synthesis audit.
         self._gathered_sources: List[Dict[str, Any]] = []
+        # Last auditor grounding score, surfaced for the efficiency meter.
+        self._last_audit_score: Optional[float] = None
 
         # Conversation history with interleaved thinking
         self.messages: List[Dict[str, Any]] = []
@@ -260,11 +265,15 @@ Research Workflow:
         # Start a fresh Graph of Trace rooted at this research subgoal.
         self.trace.reset()
         self.trace.record_subgoal(query)
+        # Reset the efficiency meter; iterations are the budget axis.
+        self.efficiency_meter.reset(budget_horizon=float(max_iterations))
 
         iteration = 0
 
         while iteration < max_iterations:
             iteration += 1
+            # One research-loop iteration = one unit of search budget.
+            self.efficiency_meter.record_iteration()
 
             try:
                 # Call Minimax M2.1 with streaming for long requests
@@ -298,9 +307,14 @@ Research Workflow:
                     final_text = self._extract_text_from_content(response.content)
                     # BrainPilot-style grounding audit before returning the report.
                     final_text = self._audit_report(final_text)
+                    # Record the audited grounding score as the run's reward so the
+                    # efficiency meter can pair it with the budget consumed.
+                    if self._last_audit_score is not None:
+                        self.efficiency_meter.record_reward(self._last_audit_score)
                     # Append the Graph of Trace so the workflow travels with it.
                     self.trace.record_report(final_text)
                     final_text += self.trace.render()
+                    final_text += self.efficiency_meter.render()
                     return final_text
 
                 elif response.stop_reason == "tool_use":
@@ -319,6 +333,8 @@ Research Workflow:
 
                             # Record the tool call in the Graph of Trace.
                             self.trace.record_tool(tool_name, tool_input)
+                            # Count tool calls / sources as supporting budget cost.
+                            self.efficiency_meter.note_tool_call()
 
                             # Execute the tool
                             result = self.execute_tool(tool_name, tool_input)
@@ -326,6 +342,7 @@ Research Workflow:
                             # Link the evidence this tool returned into the trace.
                             if tool_name == "web_search_retriever":
                                 self.trace.record_evidence(self._gathered_sources)
+                                self.efficiency_meter.note_sources(self._gathered_sources)
 
                             tool_results.append({
                                 "type": "tool_result",
@@ -381,6 +398,9 @@ Research Workflow:
         """
         try:
             result = self.auditor.audit(report, self._gathered_sources)
+            # Surface the audited score (None when unverifiable) so the
+            # efficiency meter can pair outcome quality with budget consumed.
+            self._last_audit_score = result.score if result.verifiable else None
             console.print(
                 f"[bold green]✓ Auditor:[/bold green] {result.grounded_citations}/"
                 f"{result.total_citations} citations grounded "
@@ -389,6 +409,7 @@ Research Workflow:
             )
             return report + "\n" + self.auditor.format_report(result)
         except Exception as exc:  # pragma: no cover - defensive, never block report
+            self._last_audit_score = None
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
 

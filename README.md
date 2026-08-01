@@ -323,3 +323,34 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Search Efficiency
+
+Each report also carries a **search efficiency** reading that judges the run not
+only by the quality of its outcome but by how little search budget it spent
+getting there. As the supervisor runs, the meter pairs the grounding score from
+the auditor (outcome quality) with the research-loop iterations consumed (search
+budget), then appends a `## Search Efficiency` section reporting the area under
+the budget-to-reward frontier (AUC). Efficiency is reported as a dimension
+*distinct* from outcome quality: a well-grounded report that took most of the
+budget still scores low here.
+
+The meter is deterministic and parameter-free (it reuses the auditor's grounding
+score and the iteration count the supervisor already tracks), so it adds no API
+calls. Adapted from the efficiency-MEASUREMENT contribution of *Efficiency
+Matters in Autonomous Research* (AREK, arXiv:2607.24647v1) — Mode 2 adapted
+port, where AREK's per-candidate evaluation budget is replaced by research-loop
+iterations and AREK's task reward by the auditor's grounding score.
+Implementation lives in `src/agents/efficiency_meter.py`.
+
+**Scope.** AREK's contribution has two parts: an efficiency *measure* (the
+budget-to-reward AUC) and an adaptive *fluid search* procedure (a portfolio
+bandit allocating a fixed budget across a forest of search processes). This port
+implements only the measure; fluid search is deliberately not ported because it
+needs an edit -> verify -> keep verifier over candidate solutions that a web
+deep-research pipeline has no analog of. AREK's cross-system comparison across
+twelve tasks is also out of scope: each system is one `research()` run here, and
+aggregating runs into a comparative AUC table is a downstream evaluation
+concern.
+
