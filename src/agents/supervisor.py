@@ -7,6 +7,7 @@ from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
+from src.agents.citation_enricher import CitationEnricher
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -33,6 +34,10 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # LongCite-style fine-grained citation generator: fills in the inline
+        # [label](url) citations the report is missing by grounding each
+        # statement in the gathered sources, before the auditor verifies them.
+        self.citation_enricher = CitationEnricher()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -296,6 +301,10 @@ Research Workflow:
                 if response.stop_reason == "end_turn":
                     # Model has finished - extract final response
                     final_text = self._extract_text_from_content(response.content)
+                    # LongCite-style citation search: fill in fine-grained inline
+                    # citations the report is missing from gathered sources, then
+                    # audit the now-richer citation set.
+                    final_text = self._enrich_citations(final_text)
                     # BrainPilot-style grounding audit before returning the report.
                     final_text = self._audit_report(final_text)
                     # Append the Graph of Trace so the workflow travels with it.
@@ -368,6 +377,37 @@ Research Workflow:
                 text_parts.append(block.text)
 
         return "\n\n".join(text_parts) if text_parts else "No text content in response."
+
+    def _enrich_citations(self, report: str) -> str:
+        """Insert fine-grained, sentence-level citations the report is missing.
+
+        Adapted from LongCite's inference-time Citation Search
+        (arXiv:2409.02897): an independent post-synthesis pass that grounds each
+        report statement in the sources gathered for it and attaches an inline
+        ``[label](url)`` citation where one is missing and support exists. The
+        enrichment runs before the grounding audit so the auditor verifies the
+        fuller citation set, and never blocks delivery -- on any error the
+        report is returned unchanged.
+        """
+        try:
+            enriched, result = self.citation_enricher.cite(
+                report, self._gathered_sources
+            )
+            if result.enriched:
+                console.print(
+                    f"[bold green]✓ Citation search:[/bold green] added "
+                    f"{result.citations_added} sentence-level citation(s) "
+                    f"from {result.sources_available} gathered source(s)."
+                )
+            else:
+                console.print(
+                    f"[dim]Citation search: added {result.citations_added} "
+                    f"citation(s) (no grounded matches).[/dim]"
+                )
+            return enriched
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Citation enrichment skipped: {exc}[/dim]")
+            return report
 
     def _audit_report(self, report: str) -> str:
         """Run a grounding audit on the final report and append the findings.

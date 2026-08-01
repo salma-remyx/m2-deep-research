@@ -323,3 +323,35 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Inline Citation Enrichment
+
+Before the grounding audit runs, a **citation enricher** performs LongCite-style
+fine-grained citation search over the synthesized report. It walks the report
+sentence by sentence and, for any statement that lacks an inline citation but
+shares enough key terms with a source the web search retriever gathered, inserts
+a `[label](url)` citation to the best-supporting source. This fills the gap the
+auditor exists to police — the supervisor's prompt asks for inline citations,
+yet nothing previously generated them.
+
+The enricher is deterministic and parameter-free (lexical key-term overlap with
+retrieved sources), so it runs on every report with no extra API calls, and it
+leaves existing citations, structural markdown, and lines already referencing a
+source untouched. It runs before the grounding audit so the auditor verifies the
+now-richer citation set. Adapted from *LongCite: Enabling LLMs to Generate
+Fine-grained Citations in Long-context QA* (arXiv:2409.02897) — Mode 2 adapted
+port, where LongCite's BM25/dense context-span retriever is replaced by the
+parameter-free lexical-overlap proxy over this pipeline's retrieved Exa sources,
+and its sentence-index `[i]` citation format is mapped to this repo's native
+`[label](url)` format. Implementation lives in `src/agents/citation_enricher.py`.
+
+**Scope.** LongCite's contribution has two parts — a training stage
+(Citation-Friendly Fine-Tuning and LongCite-RL) that shapes the model to emit
+citations natively, and an inference-time Citation Search that attaches
+supporting citations to each generated statement. This port implements only the
+inference-time citation search; the training stage is deliberately not ported
+because it requires a fine-tuning pipeline this repo does not host. The lexical
+proxy also cites the best-matching source document (by URL) rather than the
+exact supporting passage LongCite's span retriever returns.
+
