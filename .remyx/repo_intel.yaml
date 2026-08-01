@@ -98,7 +98,14 @@ observed_landing_zones:
       \ rewarded on final audit (:313), and rendered into the returned repor"
     branch: efficiency-matters-in-autonomous-research
     timestamp: '2026-08-01T00:30:57Z'
-  last_observed: '2026-08-01T00:30:57Z'
+  - arxiv: 2409.02897v3
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "SupervisorAgent.research() in src/agents/supervisor.py \u2014\
+      \ invoked at the end_turn finalization step (supervisor.py:307) via _enrich_citations(),\
+      \ immediately before _audit_report(); reached from main.py"
+    branch: longcite-enabling-llms-to-generate-fine-grained-citations-in
+    timestamp: '2026-08-01T15:04:54Z'
+  last_observed: '2026-08-01T15:04:54Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -107,4 +114,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-01T00:30:57Z'
+last_updated: '2026-08-01T15:04:54Z'
