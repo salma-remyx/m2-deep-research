@@ -91,7 +91,14 @@ observed_landing_zones:
       at main.py:103). The new RelayFlowAnalyzer runs t
     branch: when-do-multi-agent-systems-help-an-information-bottleneck-p
     timestamp: '2026-07-30T17:56:54Z'
-  last_observed: '2026-07-30T17:56:54Z'
+  - arxiv: 2607.24647v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "SupervisorAgent.research() in src/agents/supervisor.py \u2014\
+      \ instantiated in __init__ (:40), reset (:269), ticked per iteration (:276),\
+      \ rewarded on final audit (:313), and rendered into the returned repor"
+    branch: efficiency-matters-in-autonomous-research
+    timestamp: '2026-08-01T00:30:57Z'
+  last_observed: '2026-08-01T00:30:57Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -100,4 +107,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-07-30T17:56:54Z'
+last_updated: '2026-08-01T00:30:57Z'
