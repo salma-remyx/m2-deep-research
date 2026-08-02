@@ -7,6 +7,7 @@ from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
+from src.agents.filesystem_memory import FilesystemMemory
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -33,6 +34,10 @@ class SupervisorAgent:
 
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
+        # Cross-run filesystem memory: retrieved sources organized into a
+        # markdown tree so later runs can recall prior findings instead of
+        # re-searching from scratch (arXiv:2607.26637v1, management + search).
+        self.memory = FilesystemMemory()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
@@ -233,6 +238,12 @@ Research Workflow:
                 getattr(self.web_search_retriever, "last_search_results", None)
                 or self._gathered_sources
             )
+            # Management role: organize gathered sources into the cross-run
+            # filesystem memory. Never blocks the research workflow.
+            try:
+                self.memory.integrate(self._gathered_sources, research_query)
+            except Exception as exc:  # pragma: no cover - defensive, never block
+                console.print(f"[dim]Memory integrate skipped: {exc}[/dim]")
             return result
 
         else:
@@ -391,6 +402,16 @@ Research Workflow:
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
+
+    def recall(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Retrieve relevant prior sources from the filesystem memory store.
+
+        Search role of the filesystem-memory model (arXiv:2607.26637v1): answer
+        a query with sources already organized in earlier runs, so subsequent
+        research can reuse gathered findings instead of re-searching the web.
+        Returns the top sources as the same dict shape the retriever emits.
+        """
+        return self.memory.recall(query, limit=limit).as_cited_sources()
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """

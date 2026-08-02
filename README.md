@@ -323,3 +323,35 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Filesystem Memory
+
+Every research run re-searches the web from scratch — the supervisor has no
+memory of what earlier runs already gathered. The **filesystem memory** adds
+the missing cross-run stage: each time the web search retriever returns
+sources, they are organized into a markdown directory tree under `memory/`
+(one topic directory per subquery, one `.md` file per source), so later runs
+can recall prior findings instead of re-searching. `SupervisorAgent.recall()`
+answers a query with the relevant stored sources and their citations.
+
+The store is deterministic and parameter-free (sources are binned by subquery
+text and scored by lexical overlap, the same grounding proxy the auditor
+uses), so it adds no API calls. It also exposes a **search-economy** measure
+(bytes the organized tree reads versus a flat dump) — the headline result of
+the reference, that organized stores cut retrieval cost as the store grows.
+Adapted from *Filesystem-Based Memory for LLM Agents: Organization, Evolution,
+and Sustainability* (arXiv:2607.26637) — Mode 2 adapted port, where the
+paper's LLM management and search agents are replaced by the parameter-free
+organizer and lexical retriever, and its benchmark suite is cut in favor of
+the directly-computable search-economy comparison. Implementation lives in
+`src/agents/filesystem_memory.py`.
+
+**Scope.** The paper studies three roles around one memory filesystem —
+management, search, and execution (task trajectories distilled into skills).
+This port implements the **management** and **search** roles, which map onto
+this pipeline's gathered-sources flow. The execution/skill role is deliberately
+not ported: this repo has no task-trajectory store to compress into reusable
+skills, so there is nothing analogous to distill. The `memory/` directory is a
+runtime artifact (like `reports/`) and is not committed.
+
