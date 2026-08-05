@@ -112,7 +112,12 @@ observed_landing_zones:
       research_query) inline in the'
     branch: filesystem-based-memory-for-llm-agents-organization-evolutio
     timestamp: '2026-08-02T05:06:38Z'
-  last_observed: '2026-08-02T05:06:38Z'
+  - arxiv: 2607.28374v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: ReportAuditor.audit
+    branch: ledgermind-provenance-constrained-multimodal-agentic-reasoni
+    timestamp: '2026-08-05T12:43:37Z'
+  last_observed: '2026-08-05T12:43:37Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -121,4 +126,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-02T05:06:38Z'
+last_updated: '2026-08-05T12:43:37Z'
