@@ -323,3 +323,30 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Structured Evidence Ledger
+
+The grounding auditor now links every audited claim to the **specific retrieved
+source(s)** that back it, rather than scoring the corpus as a flat yes/no.
+Retrieved Exa sources are normalized into a Structured Evidence Ledger: each
+source becomes a ledger entry with a stable id (`E1`, `E2`, …), the ledger is
+the grounding state, a citation URL resolves to its entry, and each claim
+resolves to the entry(ies) whose key terms overlap it. The audit section
+appended to a report now carries a `Claim provenance` block showing, for each
+grounded claim, the named source(s) that support it, and how many of the
+gathered sources were actually cited (the ledger's "active" subset).
+
+The ledger is deterministic and parameter-free (lexical key-term overlap, the
+same proxy the auditor already used), so it adds no API calls and runs on every
+report. Adapted from the Structured Evidence Ledger in *LedgerMind:
+Provenance-Constrained Multimodal Agentic Reasoning with a Structured Evidence
+Ledger* (arXiv:2607.28374) — Mode 2 adapted port, where LedgerMind's learned
+LLM grounding judge and entity/numeric NER are replaced by the parameter-free
+lexical-overlap proxy, and its Event-Triggered Verification-and-Repair engine
+is not ported (the audit here is read-only and never rewrites the report, so
+there is no repair-time amplification surface). The multimodal VQA framing is
+incidental — the ledger/provenance scheme is modality-agnostic and the Exa
+sources are the natural evidence corpus. Implementation lives in
+`src/agents/evidence_ledger.py`, invoked from `ReportAuditor.audit`.
+
