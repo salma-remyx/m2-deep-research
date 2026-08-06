@@ -3,6 +3,7 @@
 import json
 import httpx
 from typing import Dict, Any, List
+from src.agents.passage_segmenter import PassageSegmenter
 from src.tools.exa_tool import ExaTool
 from src.utils.config import Config
 
@@ -21,6 +22,9 @@ class WebSearchRetriever:
         self.model = Config.OPENROUTER_MODEL
         # Last set of raw search results gathered for an audit pass.
         self.last_search_results: List[Dict[str, Any]] = []
+        # Variable-length source segmenter (adapted LumberChunker) that turns
+        # full Exa text into content-coherent passages before synthesis.
+        self.segmenter = PassageSegmenter()
 
         self.system_prompt = """You are a web search retrieval specialist.
 
@@ -128,7 +132,18 @@ Be comprehensive but focused. Prioritize high-quality, authoritative sources."""
                 title = result.get("title", "No title")
                 url = result.get("url", "")
                 highlights = result.get("highlights", [])
-                text_excerpt = result.get("text", "")[:1000]  # Increased to 1000 chars for more context
+                # Segment the full source text into variable-length, content-
+                # coherent passages (LumberChunker-style content-shift split)
+                # and keep the most query-relevant ones within budget. This
+                # recovers relevant context past the old 1000-char hard cut
+                # instead of truncating mid-passage, leaving ``text`` on the
+                # source dict intact for the grounding auditor.
+                passages = self.segmenter.select(
+                    self.segmenter.segment(result.get("text", "")),
+                    query=subquery,
+                    max_chars=1000,
+                )
+                text_excerpt = "\n".join(p.text for p in passages)
 
                 context_parts.append(f"\n### Result {i}: {title}")
                 context_parts.append(f"URL: {url}")

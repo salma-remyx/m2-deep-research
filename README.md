@@ -323,3 +323,26 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Variable-Length Source Segmentation
+
+Before the supervisor synthesizes findings, each retrieved Exa source is
+segmented into **variable-length, content-coherent passages** whose
+boundaries fall where the source's content begins to shift. The web search
+retriever then keeps the most query-relevant passages within a per-source
+budget and feeds those to synthesis, instead of hard-truncating the full
+source text at its first 1000 characters. This recovers relevant context
+that the previous fixed cut threw away, which matters for the pipeline's
+comprehensive, academic-quality report goal.
+
+The segmenter is deterministic and parameter-free, so it runs on every
+source with no extra API calls. Adapted from *LumberChunker: Long-Form
+Narrative Document Segmentation* (arXiv:2406.17526) — Mode 2 adapted port,
+where LumberChunker's atomic-passage decomposition, iterative
+sliding-window scan, and "content begins to shift" boundary rule are kept
+at full fidelity, and its per-window LLM shift oracle is replaced by a
+parameter-free lexical-coherence proxy (a passage is "same content" when it
+shares enough non-stopword tokens with the window anchor). Implementation
+lives in `src/agents/passage_segmenter.py`, wired into
+`WebSearchRetriever.synthesize_findings`.
