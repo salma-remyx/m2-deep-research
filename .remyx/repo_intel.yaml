@@ -117,7 +117,12 @@ observed_landing_zones:
     call_site_specifics: ReportAuditor.audit
     branch: ledgermind-provenance-constrained-multimodal-agentic-reasoni
     timestamp: '2026-08-05T12:43:37Z'
-  last_observed: '2026-08-05T12:43:37Z'
+  - arxiv: 2406.17526v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: WebSearchRetriever.synthesize_findings
+    branch: lumberchunker-long-form-narrative-document-segmentation
+    timestamp: '2026-08-06T04:32:40Z'
+  last_observed: '2026-08-06T04:32:40Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -126,4 +131,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-05T12:43:37Z'
+last_updated: '2026-08-06T04:32:40Z'
