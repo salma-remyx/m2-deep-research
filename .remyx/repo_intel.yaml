@@ -122,7 +122,14 @@ observed_landing_zones:
     call_site_specifics: WebSearchRetriever.synthesize_findings
     branch: lumberchunker-long-form-narrative-document-segmentation
     timestamp: '2026-08-06T04:32:40Z'
-  last_observed: '2026-08-06T04:32:40Z'
+  - arxiv: 2608.02097v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: 'SupervisorAgent''s existing agentic loop in src/agents/supervisor.py:
+      execute_tool now dispatches the explore_workspace tool to WebSearchRetriever.explore_sources(),
+      and the pre-existing retrieve() pat'
+    branch: fetch-then-explore-decoupling-selection-from-extraction-over
+    timestamp: '2026-08-07T14:46:15Z'
+  last_observed: '2026-08-07T14:46:15Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -131,4 +138,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-06T04:32:40Z'
+last_updated: '2026-08-07T14:46:15Z'
