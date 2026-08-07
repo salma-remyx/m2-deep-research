@@ -5,6 +5,7 @@ import httpx
 from typing import Dict, Any, List
 from src.tools.exa_tool import ExaTool
 from src.utils.config import Config
+from src.agents.source_workspace import SourceWorkspace
 
 
 class WebSearchRetriever:
@@ -21,6 +22,10 @@ class WebSearchRetriever:
         self.model = Config.OPENROUTER_MODEL
         # Last set of raw search results gathered for an audit pass.
         self.last_search_results: List[Dict[str, Any]] = []
+        # Persistent workspace of every fetched source for the run, kept so the
+        # supervisor can re-extract evidence on demand without a new search.
+        # (Fetch-then-Explore, arXiv:2608.02097v1 -- decouple selection from extraction.)
+        self.workspace = SourceWorkspace()
 
         self.system_prompt = """You are a web search retrieval specialist.
 
@@ -186,6 +191,17 @@ Be thorough and detailed - this will feed into a comprehensive research report."
         except Exception as e:
             return f"Error synthesizing findings: {str(e)}"
 
+    def explore_sources(self, focus: str) -> str:
+        """Re-extract evidence for a focus from cached sources, with no Exa call.
+
+        This is the Fetch-then-Explore "explore" move (arXiv:2608.02097v1):
+        return to pages already fetched and pull the evidence the supervisor
+        needs *now*, rather than re-running a web search.
+        """
+        if not focus or not focus.strip():
+            return "Error: explore_workspace requires a non-empty 'focus'."
+        return self.workspace.explore(focus.strip()).render()
+
     def retrieve(self, research_query: str, subqueries_json: str) -> str:
         """
         Execute web search retrieval for given subqueries.
@@ -210,6 +226,9 @@ Be thorough and detailed - this will feed into a comprehensive research report."
             search_results = self.search_with_subqueries(subqueries)
             # Expose raw results for the supervisor's grounding auditor.
             self.last_search_results = search_results
+            # Record raw sources into the persistent workspace (selection, kept)
+            # so they survive for on-demand re-extraction later in the run.
+            self.workspace.record(search_results)
 
             # Synthesize findings
             findings = self.synthesize_findings(research_query, search_results)

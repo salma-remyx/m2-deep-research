@@ -323,3 +323,37 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Persistent Source Workspace (Fetch-then-Explore)
+
+Every page the web search retriever fetches is recorded into a **persistent
+source workspace** that survives for the whole research run, instead of being
+read once at fetch time and dropped. The supervisor gets an `explore_workspace`
+tool that re-extracts evidence for a specific focus from those cached pages —
+**with no new web search** — so as each report section sharpens it can return
+to a page it already fetched and pull the detail it now needs, rather than
+re-running `web_search_retriever`. Evidence accumulates across the trajectory,
+and pages are not released when the agent moves on.
+
+This decouples page *selection* (fetch and keep) from evidence *extraction*
+(re-read on demand), which is the core move of *Fetch-then-Explore: Decoupling
+Selection from Extraction over a Persistent Workspace for Search Agents*
+(arXiv:2608.02097v1). The intended payoff is fewer Exa calls and better
+evidence recall on long-horizon tasks, since a page that turns out to matter
+many turns later does not have to be fetched again.
+
+Adapted from Fetch-then-Explore — Mode 2 adapted port. The paper writes full
+fetched pages to the filesystem; this pipeline works from Exa excerpts (title /
+url / text / highlights), so the excerpt is the unit of "a page" and the
+workspace holds them out-of-context on the retriever, with an optional JSON
+dump. The paper's LLM on-demand extractor is replaced by a parameter-free
+lexical extractor (focus-term overlap over cached text), which is deterministic
+and needs no extra API keys — the same substitution the grounding auditor makes
+for its fabrication judge. The existing fetch-time `synthesize_findings` path
+is left intact; the workspace adds the persistent + on-demand re-extraction
+surface alongside it. Implementation lives in `src/agents/source_workspace.py`,
+wired into `src/agents/web_search_retriever.py` and exposed as the
+`explore_workspace` tool in `src/agents/supervisor.py`.
+
+

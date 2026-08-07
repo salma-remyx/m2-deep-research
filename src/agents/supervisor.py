@@ -52,6 +52,15 @@ You have access to the following tools:
 2. web_search_retriever - Searches the web using Exa and synthesizes findings
    - Input: research_query (string), subqueries_json (string)
    - Returns: Comprehensive organized findings with sources
+   - Pages fetched here are recorded into a persistent workspace kept for the
+     whole run, so evidence can be re-pulled later without a new search.
+
+3. explore_workspace - Re-extracts evidence for a focus from previously fetched
+   pages held in the persistent workspace, with NO new web search.
+   - Input: focus (string) -- the fact/entity/topic to pull evidence for
+   - Returns: Matching evidence passages with URLs, from the cached workspace
+   - Use it to revisit a page you already fetched as the report's sections
+     sharpen, instead of calling web_search_retriever again.
 
 Research Workflow:
 1. Call planning_agent with the user's research query to generate comprehensive subqueries
@@ -206,6 +215,30 @@ Research Workflow:
                     "required": ["research_query", "subqueries_json"],
                 },
             },
+            {
+                "name": "explore_workspace",
+                "description": (
+                    "Re-extracts evidence for a specific focus from previously "
+                    "fetched pages held in the persistent source workspace, "
+                    "without running a new web search. Use this to pull a "
+                    "detail from a page already retrieved as the report's "
+                    "needs sharpen, instead of calling web_search_retriever "
+                    "again."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "focus": {
+                            "type": "string",
+                            "description": (
+                                "The specific fact, entity, or topic to pull "
+                                "evidence for from cached pages."
+                            ),
+                        }
+                    },
+                    "required": ["focus"],
+                },
+            },
         ]
 
     def execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
@@ -234,6 +267,12 @@ Research Workflow:
                 or self._gathered_sources
             )
             return result
+
+        elif tool_name == "explore_workspace":
+            # Fetch-then-Explore (arXiv:2608.02097v1): re-extract evidence for a
+            # focus from previously fetched pages, with no new web search.
+            focus = tool_input.get("focus", "")
+            return self.web_search_retriever.explore_sources(focus)
 
         else:
             return f"Error: Unknown tool '{tool_name}'"
