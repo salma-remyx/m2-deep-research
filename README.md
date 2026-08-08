@@ -323,3 +323,39 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Speculative Actions
+
+The research loop is sequential: the model emits a tool call, the supervisor
+executes it, the model emits the next. The web-search retriever is by far the
+slowest step (several Exa lookups plus a synthesis pass), yet it is also the
+most predictable — it always follows the planning agent and consumes that
+agent's subquery blob verbatim. **Speculative Actions** exploit that: after the
+planner returns, the predicted retriever call is pre-executed on a background
+thread that overlaps the model's next generation step. When the model then
+emits the retriever call, the result is already in hand and is served on an
+exact match; on a mismatch the real call runs fresh. Verify-on-match makes the
+optimization **lossless** — the model is never handed a result for an action it
+did not choose.
+
+It is opt-in (`SupervisorAgent.enable_speculative_actions()`) and off by
+default, so default runs are unchanged; the speculate step uses a
+parameter-free workflow predictor rather than a draft LLM. Adapted from
+*Speculative Actions: A Lossless Framework for Faster Agentic Systems*
+(arXiv:2510.04371v2) — Mode 2 adapted port, where the paper's learned draft
+model is replaced by a deterministic workflow-transition predictor and its
+general concurrency runtime by a single in-flight daemon thread.
+Implementation lives in `src/agents/speculative_actions.py`.
+
+**Scope.** The paper's draft model speculates arbitrary next actions from the
+conversation; this port speculates only the canonical
+`planning_agent → web_search_retriever` transition (the one action whose exact
+input is knowable in advance), so hit rate is high on this pipeline's shape but
+the predictor does not generalize to arbitrary tool graphs. The pre-execution
+runs the retriever once speculatively; on a miss that work is discarded (the
+paper's accepted cost of speculation). For tools whose result is an LLM
+synthesis, losslessness holds over the action trajectory — the model always
+sees a result for the exact `(tool, input)` it chose — rather than
+byte-for-byte, since synthesis is non-deterministic.
+

@@ -1,13 +1,14 @@
 """Supervisor Agent using Minimax M2.1 with interleaved thinking."""
 
 import anthropic
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from rich.console import Console
 from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.speculative_actions import SpeculativeActions
 
 # Initialize rich console
 console = Console()
@@ -37,6 +38,10 @@ class SupervisorAgent:
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
         self._gathered_sources: List[Dict[str, Any]] = []
+        # Opt-in Speculative Actions middleware (arXiv:2510.04371v2):
+        # losslessly overlaps the next tool call with model generation.
+        # None until enable_speculative_actions() wires it.
+        self._speculative: Optional[SpeculativeActions] = None
 
         # Conversation history with interleaved thinking
         self.messages: List[Dict[str, Any]] = []
@@ -212,6 +217,11 @@ Research Workflow:
         """
         Execute a tool and return its result.
 
+        When speculative actions are enabled, the call is routed through the
+        Speculative Actions middleware so a predicted next call that was
+        pre-executed during the previous model-generation step is served on an
+        exact match (a lossless hit); otherwise the handler runs directly.
+
         Args:
             tool_name: Name of the tool to execute
             tool_input: Input parameters for the tool
@@ -219,6 +229,12 @@ Research Workflow:
         Returns:
             Tool execution result as string
         """
+        if self._speculative is not None:
+            return self._speculative.execute(tool_name, tool_input)
+        return self._execute_tool_raw(tool_name, tool_input)
+
+    def _execute_tool_raw(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
+        """Dispatch a tool call to its handler and return the result string."""
         if tool_name == "planning_agent":
             research_query = tool_input.get("research_query", "")
             return self.planning_agent.execute(research_query)
@@ -237,6 +253,27 @@ Research Workflow:
 
         else:
             return f"Error: Unknown tool '{tool_name}'"
+
+    def enable_speculative_actions(self) -> SpeculativeActions:
+        """
+        Opt in to speculative tool-call pre-execution (off by default).
+
+        Wraps the tool executor so the predicted next call runs on a
+        background thread and is served losslessly on an exact match with
+        the model's real action. Returns the middleware for stat inspection.
+        """
+        self._speculative = SpeculativeActions(executor=self._execute_tool_raw)
+        return self._speculative
+
+    def _prime_speculation(
+        self, tool_name: str, tool_input: Dict[str, Any], result: str
+    ) -> None:
+        """
+        Speculate the next tool call so it pre-executes during the next
+        model-generation step. No-op unless speculative actions are enabled.
+        """
+        if self._speculative is not None:
+            self._speculative.prime(tool_name, tool_input, result)
 
     def research(self, query: str, max_iterations: int = 10) -> str:
         """
@@ -326,6 +363,11 @@ Research Workflow:
                             # Link the evidence this tool returned into the trace.
                             if tool_name == "web_search_retriever":
                                 self.trace.record_evidence(self._gathered_sources)
+
+                            # Speculate the next tool call so it pre-executes
+                            # on a background thread during the next
+                            # model-generation step (Speculative Actions).
+                            self._prime_speculation(tool_name, tool_input, result)
 
                             tool_results.append({
                                 "type": "tool_result",
