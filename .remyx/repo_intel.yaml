@@ -129,7 +129,14 @@ observed_landing_zones:
       and the pre-existing retrieve() pat'
     branch: fetch-then-explore-decoupling-selection-from-extraction-over
     timestamp: '2026-08-07T14:46:15Z'
-  last_observed: '2026-08-07T14:46:15Z'
+  - arxiv: 2510.04371v2
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "(none \u2014 hooks are wired into SupervisorAgent.research()'s\
+      \ tool loop and reachable from main.py, but the middleware only executes after\
+      \ enable_speculative_actions(), which no product entry point calls)"
+    branch: speculative-actions-a-lossless-framework-for-faster-agentic-
+    timestamp: '2026-08-08T07:42:25Z'
+  last_observed: '2026-08-08T07:42:25Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -138,4 +145,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-07T14:46:15Z'
+last_updated: '2026-08-08T07:42:25Z'
