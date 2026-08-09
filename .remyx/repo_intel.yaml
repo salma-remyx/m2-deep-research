@@ -136,7 +136,14 @@ observed_landing_zones:
       \ enable_speculative_actions(), which no product entry point calls)"
     branch: speculative-actions-a-lossless-framework-for-faster-agentic-
     timestamp: '2026-08-08T07:42:25Z'
-  last_observed: '2026-08-08T07:42:25Z'
+  - arxiv: 2608.04738v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent._audit_report in src/agents/supervisor.py
+      (line 403, EvidenceGraph.from_run), invoked from research() (line 301), which
+      is the body executed by the top-level main.py CLI entry point (m
+    branch: evigraph-evidence-guided-autonomous-research-agents
+    timestamp: '2026-08-09T02:07:17Z'
+  last_observed: '2026-08-09T02:07:17Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -145,4 +152,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-08T07:42:25Z'
+last_updated: '2026-08-09T02:07:17Z'
