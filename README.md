@@ -323,3 +323,47 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Evidence Graph Validation
+
+Where the grounding auditor checks each citation flatly and the Graph of Trace
+records how a report was built, the **evidence graph** validates the
+*structure* of the report's claim-evidence chain. After synthesis it builds a
+typed graph from the research query (**Problem**), the sources gathered by the
+retriever (**Evidence**), and the report's inline-cited claims (**Claim**), then
+inspects each claim's evidence chain for three defects EviGraph defines:
+
+- **missing dependency** — a claim linked to no evidence (orphaned, or no
+  evidence was gathered at all),
+- **result-claim inconsistency** — a claim that cites a URL absent from the
+  gathered evidence (its stated support does not exist),
+- **semantic misalignment** — a claim whose terms do not match the evidence it
+  cites (cited the wrong source).
+
+It localizes the **earliest weak node** as the repair focus, reports a **Claim
+Support Rate** (grounded claims / total claims), and appends an
+`## Evidence Graph Validation` section to the report. A checkpoint/restore pair
+protects a previously validated graph from a failed downstream repair.
+
+The validator is deterministic and parameter-free (lexical claim-evidence
+overlap), so it runs on every report with no extra API calls and complements
+the grounding auditor: the auditor checks *whether* claims are backed, the
+graph checks *whether the backing forms a complete, consistent chain*.
+Adapted from *EviGraph: Evidence-Guided Autonomous Research Agents*
+(arXiv:2608.04738) — Mode 2 adapted port. Implementation lives in
+`src/agents/evidence_graph.py`.
+
+**Scope.** EviGraph's six node types (Problem / Gap / Hypothesis / Experiment /
+Finding / Claim) describe a full hypothesis → experiment → finding pipeline; a
+web deep-research run produces no experiments, so the typed chain is reduced to
+Problem → Evidence → Claim built from this pipeline's own artifacts, and Gap /
+Hypothesis / Experiment are dropped. EviGraph's semantic-misalignment check uses
+an LLM judge; it is replaced by the parameter-free lexical-overlap proxy (the
+same substitution the grounding auditor makes). EviGraph *regenerates* the
+downstream subgraph of a weak node and re-runs the agent; this pipeline has no
+subgraph-regeneration loop, so regeneration is not ported — this module delivers
+the diagnostic half (typed graph, three checks, earliest-weak-node localization,
+checkpoint/restore, support rate) and surfaces what a regeneration pass should
+target.
+

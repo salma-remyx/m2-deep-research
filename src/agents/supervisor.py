@@ -7,6 +7,7 @@ from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
+from src.agents.evidence_graph import EvidenceGraph
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -370,15 +371,21 @@ Research Workflow:
         return "\n\n".join(text_parts) if text_parts else "No text content in response."
 
     def _audit_report(self, report: str) -> str:
-        """Run a grounding audit on the final report and append the findings.
+        """Run grounding + evidence-graph audits on the final report and append them.
 
-        Inspired by BrainPilot's Auditor agent (arXiv:2607.15079v1): an
-        independent post-synthesis pass that checks the report's citations and
-        claims against the sources actually retrieved by the web search
-        retriever, so fabricated citations surface before the report ships.
-        Auditing never blocks delivery -- on any error the report is returned
-        unchanged.
+        Two independent post-synthesis passes run over the same gathered sources
+        and report, neither of which ever blocks delivery:
+
+        * the **grounding auditor** (BrainPilot, arXiv:2607.15079v1) checks the
+          report's citations and claims flatly against retrieved sources; and
+        * the **evidence graph** (EviGraph, arXiv:2608.04738v1) checks the
+          *structure* of the claim-evidence chain -- missing dependencies,
+          result-claim inconsistencies, and semantic misalignment -- and reports
+          a Claim Support Rate.
+
+        On any error either pass is skipped and the report is returned as-is.
         """
+        out = report
         try:
             result = self.auditor.audit(report, self._gathered_sources)
             console.print(
@@ -387,10 +394,37 @@ Research Workflow:
                 f"({len(result.unsupported_claims)} unsupported claim(s)) "
                 f"against {result.sources_checked} source(s)."
             )
-            return report + "\n" + self.auditor.format_report(result)
+            out = report + "\n" + self.auditor.format_report(result)
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
-            return report
+
+        # EviGraph-style structural validation of the claim-evidence chain.
+        try:
+            graph = EvidenceGraph.from_run(
+                report, self._gathered_sources, self._research_query()
+            )
+            validation = graph.validate()
+            console.print(
+                f"[bold green]✓ Evidence graph:[/bold green] "
+                f"{validation.supported_claims}/{validation.total_claims} claims "
+                f"structurally grounded ({round(validation.support_rate * 100)}% "
+                f"support rate) against {validation.evidence_count} evidence node(s)."
+            )
+            out += graph.format_report(validation)
+        except Exception as exc:  # pragma: no cover - defensive, never block report
+            console.print(f"[dim]Evidence graph skipped: {exc}[/dim]")
+        return out
+
+    def _research_query(self) -> str:
+        """Best-effort recovery of the current research query from history."""
+        try:
+            first = self.messages[0]
+            content = first.get("content") if isinstance(first, dict) else None
+            if isinstance(content, str) and content.strip():
+                return content.strip()
+        except (IndexError, AttributeError):  # pragma: no cover - history empty
+            pass
+        return ""
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """
