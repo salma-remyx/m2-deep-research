@@ -143,7 +143,14 @@ observed_landing_zones:
       is the body executed by the top-level main.py CLI entry point (m
     branch: evigraph-evidence-guided-autonomous-research-agents
     timestamp: '2026-08-09T02:07:17Z'
-  last_observed: '2026-08-09T02:07:17Z'
+  - arxiv: 2607.29440v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent.execute_tool in src/agents/supervisor.py,
+      reached from the run loop at supervisor.py:389 which is driven by main.py:run_research;
+      analytic_memory.ingest() fires inside the web_search_r
+    branch: beyond-retrieval-analytic-memory-for-multimodal-agents
+    timestamp: '2026-08-10T13:13:29Z'
+  last_observed: '2026-08-10T13:13:29Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -152,4 +159,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-09T02:07:17Z'
+last_updated: '2026-08-10T13:13:29Z'
