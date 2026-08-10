@@ -8,6 +8,7 @@ from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.analytic_memory import AnalyticMemory
 
 # Initialize rich console
 console = Console()
@@ -35,6 +36,8 @@ class SupervisorAgent:
         self.auditor = ReportAuditor()
         # Auditable Graph of Trace of the workflow that produces each report.
         self.trace = ResearchTrace()
+        # Analytic memory over gathered sources (AdaMM-style compute over evidence)
+        self.analytic_memory = AnalyticMemory()
         # Sources captured from the retriever for the post-synthesis audit.
         self._gathered_sources: List[Dict[str, Any]] = []
 
@@ -52,6 +55,12 @@ You have access to the following tools:
 2. web_search_retriever - Searches the web using Exa and synthesizes findings
    - Input: research_query (string), subqueries_json (string)
    - Returns: Comprehensive organized findings with sources
+
+3. analytic_memory - Computes over already-gathered facts (beyond retrieval):
+   filter, aggregate, rank, or compare-over-time the numeric observations
+   extracted from retrieved sources. Call during synthesis to quantify trends.
+   - Input: operation (summarize|filter|aggregate|rank|series) + optional params
+   - Returns: A structured analytic digest with provenance-linked observations
 
 Research Workflow:
 1. Call planning_agent with the user's research query to generate comprehensive subqueries
@@ -206,6 +215,45 @@ Research Workflow:
                     "required": ["research_query", "subqueries_json"],
                 },
             },
+            {
+                "name": "analytic_memory",
+                "description": (
+                    "Compute over gathered evidence beyond retrieval: run an "
+                    "analytic op over provenance-linked numeric observations "
+                    "extracted from retrieved sources. summarize discovered "
+                    "fields; filter by field/unit/value; aggregate "
+                    "(count/sum/avg/min/max, optionally grouped); rank top-N; "
+                    "or build a temporal series. Use during synthesis to "
+                    "quantify trends and comparisons across sources."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "operation": {
+                            "type": "string",
+                            "enum": ["summarize", "filter", "aggregate", "rank", "series"],
+                            "description": "The analytic operation to run.",
+                        },
+                        "field": {"type": "string", "description": "Optional field slug to restrict to."},
+                        "unit": {"type": "string", "description": "Optional unit (percent/dollars/billion/gb/count)."},
+                        "op": {
+                            "type": "string",
+                            "enum": [">", "<", ">=", "<=", "==", "!="],
+                            "description": "Comparator for the filter operation.",
+                        },
+                        "value": {"type": "number", "description": "Operand for filter's op."},
+                        "func": {
+                            "type": "string",
+                            "enum": ["count", "sum", "avg", "min", "max"],
+                            "description": "Aggregation function.",
+                        },
+                        "group_by": {"type": "string", "enum": ["field", "unit"], "description": "Grouping for aggregate."},
+                        "n": {"type": "integer", "description": "Top-N count for rank."},
+                        "order": {"type": "string", "enum": ["desc", "asc"], "description": "Rank order (default desc)."},
+                    },
+                    "required": ["operation"],
+                },
+            },
         ]
 
     def execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
@@ -233,7 +281,24 @@ Research Workflow:
                 getattr(self.web_search_retriever, "last_search_results", None)
                 or self._gathered_sources
             )
+            # Materialize the gathered evidence into analytic memory so the
+            # supervisor can compute over it (filter/aggregate/rank/series)
+            # during synthesis, beyond flat retrieval.
+            self.analytic_memory.ingest(self._gathered_sources)
             return result
+
+        elif tool_name == "analytic_memory":
+            operation = tool_input.get("operation", "summarize")
+            params = {
+                k: v
+                for k, v in tool_input.items()
+                if k != "operation" and v is not None
+            }
+            try:
+                result = self.analytic_memory.query(operation, **params)
+                return result.render()
+            except Exception as exc:  # pragma: no cover - never block synthesis
+                return f"Error querying analytic memory: {exc}"
 
         else:
             return f"Error: Unknown tool '{tool_name}'"

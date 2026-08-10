@@ -323,3 +323,36 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Analytic Memory
+
+Alongside retrieval, the supervisor has access to an **analytic memory** that
+lets it *compute* over the evidence it has already gathered rather than only
+re-read it. After each `web_search_retriever` call, the retrieved sources are
+materialized into provenance-linked numeric observations (a measurement, its
+unit, and the source it came from); recurring field structures are discovered
+across sources. During synthesis the supervisor can call the registered
+`analytic_memory` tool to **summarize** the discovered fields, **filter** by
+field/unit/value, **aggregate** (count / sum / avg / min / max, optionally
+grouped), **rank** top-N, or build a **temporal series** — quantifying trends
+and comparisons across sources instead of paraphrasing raw search output.
+
+The extractor and query engine are deterministic and parameter-free (regex
+numeric extraction plus a context-window field-label proxy), so the tool adds
+no API calls and runs entirely offline. Adapted from *Beyond Retrieval:
+Analytic Memory for Multimodal Agents* (AdaMM, arXiv:2607.29440) — Mode 2
+adapted port, where AdaMM's learned attribute-value extractors over
+dialogue/images are replaced by this parameter-free extractor over gathered
+Exa source records, and AdaMM's learned memory-aware planner is replaced by
+the supervisor itself choosing which analytic op to call. Implementation
+lives in `src/agents/analytic_memory.py`.
+
+**Scope.** AdaMM's MemEye / MemGallery multimodal benchmarks are not ported —
+evaluation belongs in a downstream PR; this is the analytic-memory primitive
+plus its supervisor wiring. The discovered `field` is a parameter-free
+context-window proxy (the significant tokens preceding a numeric mention),
+not a learned attribute label; recurrence is detected on that proxy. This
+trades AdaMM's schema-discovery accuracy for determinism and zero extra cost.
+
+
