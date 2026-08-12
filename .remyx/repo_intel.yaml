@@ -150,7 +150,14 @@ observed_landing_zones:
       analytic_memory.ingest() fires inside the web_search_r
     branch: beyond-retrieval-analytic-memory-for-multimodal-agents
     timestamp: '2026-08-10T13:13:29Z'
-  last_observed: '2026-08-10T13:13:29Z'
+  - arxiv: 2608.05876v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: SupervisorAgent.research() -- _refine_query() is invoked
+      at the top of research(), which is reached from main.py's run_research() CLI
+      entry; the refined spec flows into the supervisor's message stream
+    branch: personalized-deep-research-query-refinement-with-graph-scaff
+    timestamp: '2026-08-12T20:37:39Z'
+  last_observed: '2026-08-12T20:37:39Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -159,4 +166,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-10T13:13:29Z'
+last_updated: '2026-08-12T20:37:39Z'
