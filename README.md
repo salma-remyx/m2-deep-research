@@ -323,3 +323,37 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Research Query Refinement
+
+Before a request reaches planning or search, a **query refiner** expands the
+raw user request into a structured, intent-grounded **research specification**.
+It walks an *intent elicitation graph* of framing factors — objective, scope,
+audience, depth, time horizon, constraints, and success criteria — and for each
+factor either keeps the signal the request already provides or provisions a
+sensible default. The consolidated spec (the original goal followed by the
+framing context) is what the supervisor and planning agent then consume, so
+later stages start from a sharper, personalized target.
+
+The refiner is deterministic and parameter-free (keyword/category overlap over
+the request decides which factors are already grounded), so it runs on every
+request with no extra API calls. It is the pre-pipeline counterpart to the
+grounding auditor: the auditor checks a finished report, the refiner sharpens
+the request before research begins. Adapted from *G-STEER: Personalized Deep
+Research Query Refinement with Graph-Scaffolded Evidence Grounding*
+(arXiv:2608.05876v1) — Mode 2 adapted port, where G-STEER's learned
+clarification policy is replaced by this parameter-free, graph-driven
+self-elicitation pass (this pipeline has no user-in-the-loop, so clarifying
+questions are provisionally self-answered rather than asked), and its learned
+coverage estimator by the fraction of graph factors the request grounds.
+Implementation lives in `src/agents/query_refinement.py`.
+
+**Scope.** G-STEER trains its clarification policy on graph-scaffolded
+trajectories and evaluates downstream report personalization across deep-research
+agents. Neither the training procedure nor that benchmark is ported here — the
+policy is parameter-free, and evaluation belongs in a downstream PR. Only the
+intent-elicitation-graph structure and the per-factor clarify-or-keep decision
+are preserved.
+
+

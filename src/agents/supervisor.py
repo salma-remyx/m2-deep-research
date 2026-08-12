@@ -7,6 +7,7 @@ from src.utils.config import Config
 from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
+from src.agents.query_refinement import QueryRefinementAgent
 from src.agents.research_trace import ResearchTrace
 
 # Initialize rich console
@@ -31,6 +32,10 @@ class SupervisorAgent:
         self.planning_agent = PlanningAgent()
         self.web_search_retriever = WebSearchRetriever()
 
+        # Pre-pipeline query refinement (G-STEER-style intent elicitation):
+        # expands the raw request into a personalized research spec before
+        # planning/retrieval.
+        self.query_refiner = QueryRefinementAgent()
         # Post-synthesis grounding auditor (BrainPilot-style fabrication check)
         self.auditor = ReportAuditor()
         # Auditable Graph of Trace of the workflow that produces each report.
@@ -249,6 +254,10 @@ Research Workflow:
         Returns:
             Comprehensive research report
         """
+        # Refine the raw request into an intent-grounded research specification
+        # (G-STEER-style elicitation) before it enters the planning/search loop.
+        query = self._refine_query(query)
+
         # Initialize conversation with user query
         self.messages = [
             {
@@ -368,6 +377,28 @@ Research Workflow:
                 text_parts.append(block.text)
 
         return "\n\n".join(text_parts) if text_parts else "No text content in response."
+
+    def _refine_query(self, query: str) -> str:
+        """Refine a raw request into an intent-grounded research specification.
+
+        G-STEER-inspired (arXiv:2608.05876v1): before the request enters the
+        planning/search loop, an intent-elicitation graph expands it into a
+        personalized research spec -- factors the request already grounds are
+        kept, the rest are provisionally clarified (self-elicited, since this
+        pipeline has no user-in-the-loop). Refinement never blocks research --
+        on any error the original query is returned unchanged.
+        """
+        try:
+            result = self.query_refiner.analyze(query)
+            console.print(
+                f"[bold green]✓ Query Refiner:[/bold green] "
+                f"{result.grounded_count}/{len(result.factors)} intent factors "
+                f"grounded ({result.elicited_count} provisionally clarified)."
+            )
+            return result.refined_spec
+        except Exception as exc:  # pragma: no cover - defensive, never block research
+            console.print(f"[dim]Query refiner skipped: {exc}[/dim]")
+            return query
 
     def _audit_report(self, report: str) -> str:
         """Run a grounding audit on the final report and append the findings.
