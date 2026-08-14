@@ -323,3 +323,27 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Prompt Evolution
+
+The pipeline also **learns from its own runs**. After each report, the run's
+grounding audit and Graph of Trace are converted into structured diagnoses
+(a failure mode, a target agent, and the number of runs backing it). Only
+when the *same* diagnosis recurs across runs does the system propose a single
+revision — an instruction appended to the target agent's system prompt. The
+candidate then runs on the next research task before it is judged: it is kept
+only if the grounding score does not drop, and retired otherwise. Revisions
+persist as plain prompt edits (to a JSON state file), so the system improves
+across runs with no LLM parameter updates.
+
+Adapted from *EMAS: Stabilizing Multi-Agent System Evolution through
+Evidence-Guided Revision* (arXiv:2608.07196) — Mode 2 adapted port, where
+EMAS's LLM diagnosis step is replaced by parameter-free diagnoses from this
+pipeline's own auditor and trace, its LLM revision generator by a library of
+template revisions, and its paired validation on labelled benchmarks by the
+pipeline's deterministic grounding score. Implementation lives in
+`src/agents/prompt_evolution.py`; the loop is wired into
+`SupervisorAgent.research()` — revisions are applied at the start of a run and
+evidence is accumulated at its end.
+

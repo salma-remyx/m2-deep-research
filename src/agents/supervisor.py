@@ -8,6 +8,7 @@ from src.agents.planning_agent import PlanningAgent
 from src.agents.web_search_retriever import WebSearchRetriever
 from src.agents.auditor import ReportAuditor
 from src.agents.research_trace import ResearchTrace
+from src.agents.prompt_evolution import PromptEvolution
 
 # Initialize rich console
 console = Console()
@@ -37,6 +38,10 @@ class SupervisorAgent:
         self.trace = ResearchTrace()
         # Sources captured from the retriever for the post-synthesis audit.
         self._gathered_sources: List[Dict[str, Any]] = []
+        # Evidence-guided prompt evolution across runs (EMAS-style).
+        self.prompt_evolution = PromptEvolution()
+        # Grounding audit of the current run, fed to the evolution loop.
+        self._last_audit = None
 
         # Conversation history with interleaved thinking
         self.messages: List[Dict[str, Any]] = []
@@ -261,6 +266,9 @@ Research Workflow:
         self.trace.reset()
         self.trace.record_subgoal(query)
 
+        # Apply prompt revisions accepted by earlier runs (EMAS evolution).
+        self._apply_evolved_prompts()
+
         iteration = 0
 
         while iteration < max_iterations:
@@ -301,6 +309,8 @@ Research Workflow:
                     # Append the Graph of Trace so the workflow travels with it.
                     self.trace.record_report(final_text)
                     final_text += self.trace.render()
+                    # Feed this run's evidence into the EMAS evolution loop.
+                    self._evolve_from_run()
                     return final_text
 
                 elif response.stop_reason == "tool_use":
@@ -381,6 +391,7 @@ Research Workflow:
         """
         try:
             result = self.auditor.audit(report, self._gathered_sources)
+            self._last_audit = result
             console.print(
                 f"[bold green]✓ Auditor:[/bold green] {result.grounded_citations}/"
                 f"{result.total_citations} citations grounded "
@@ -391,6 +402,58 @@ Research Workflow:
         except Exception as exc:  # pragma: no cover - defensive, never block report
             console.print(f"[dim]Auditor skipped: {exc}[/dim]")
             return report
+
+    def _apply_evolved_prompts(self) -> None:
+        """Fold revisions accepted by earlier runs into the agents' prompts.
+
+        Part of the EMAS-style evolution loop (arXiv:2608.07196v1): accepted
+        revisions persist as plain prompt edits, so the system improves with
+        no LLM parameter updates. Applying twice is a no-op.
+        """
+        try:
+            # Pending candidates run too, so paired validation (in
+            # _evolve_from_run) judges a system that actually used them.
+            self.planning_agent.system_prompt = self.prompt_evolution.apply_accepted(
+                self.planning_agent.system_prompt,
+                "planning_agent",
+                include_candidates=True,
+            )
+            self.web_search_retriever.system_prompt = (
+                self.prompt_evolution.apply_accepted(
+                    self.web_search_retriever.system_prompt,
+                    "web_search_retriever",
+                    include_candidates=True,
+                )
+            )
+        except Exception as exc:  # pragma: no cover - evolution never blocks a run
+            console.print(f"[dim]Prompt evolution skipped: {exc}[/dim]")
+
+    def _evolve_from_run(self) -> None:
+        """Diagnose this run and let the evolution loop learn from it.
+
+        Implements the Diagnose -> Accumulate-Evidence -> Propose-One-Revision
+        -> Paired-Validation loop from EMAS (arXiv:2608.07196v1), on this
+        pipeline's own audit + trace evidence. Never blocks the report.
+        """
+        try:
+            # Validate first, diagnose second: a candidate proposed at the end
+            # of run N runs during run N+1 (see _apply_evolved_prompts) and is
+            # only judged here, at the end of the run that used it -- the
+            # target-native stand-in for EMAS's paired validation.
+            self.prompt_evolution.validate(
+                getattr(self._last_audit, "score", None)
+                if self._last_audit is not None
+                else None
+            )
+            proposed = self.prompt_evolution.observe_run(self._last_audit, self.trace)
+            if proposed is not None:
+                console.print(
+                    f"[bold cyan][Evolution][/bold cyan] proposed revision for "
+                    f"{proposed.target} ({proposed.diagnosis}, evidence="
+                    f"{proposed.evidence} run(s))"
+                )
+        except Exception as exc:  # pragma: no cover - evolution never blocks a run
+            console.print(f"[dim]Prompt evolution skipped: {exc}[/dim]")
 
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """
