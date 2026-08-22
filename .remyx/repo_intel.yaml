@@ -164,7 +164,14 @@ observed_landing_zones:
       \ _evolve_from_run() at report time; research() is reached from run_resea"
     branch: emas-stabilizing-multi-agent-system-evolution-through-eviden
     timestamp: '2026-08-14T15:44:47Z'
-  last_observed: '2026-08-14T15:44:47Z'
+  - arxiv: 2608.10743v1
+    mode: Mode 2 (adapted port)
+    call_site_specifics: "WebSearchRetriever.retrieve() in src/agents/web_search_retriever.py\
+      \ \u2014 the refiner is constructed in __init__ and invoked on the search_results\
+      \ -> synthesize_findings() path, which is dispatched from t"
+    branch: mitigating-context-interference-for-reliable-and-efficient-s
+    timestamp: '2026-08-22T03:46:38Z'
+  last_observed: '2026-08-22T03:46:38Z'
 rejected_shapes:
 - shape_tag: null
   reason_code: null
@@ -173,4 +180,4 @@ rejected_shapes:
   - arxiv: 2607.09175v1
     timestamp: '2026-07-23T15:29:39Z'
 coordination_signals: []
-last_updated: '2026-08-14T15:44:47Z'
+last_updated: '2026-08-22T03:46:38Z'
