@@ -323,3 +323,25 @@ BrainPilot's full graph over PI and specialist agents is replaced by a per-step
 trace over this pipeline's own agents. Implementation lives in
 `src/agents/research_trace.py`.
 
+---
+
+## Context Refiner
+
+Before the retriever synthesizes findings, a **context refiner** distills the
+latest retrieved turn — the Exa results just fetched for this call — down to
+its query-relevant content. Sentences whose terms do not overlap the research
+query or the subquery that fetched them are dropped, and near-duplicate sources
+within a subquery bucket are collapsed to the higher-ranked one. Titles, URLs
+and highlights pass through untouched.
+
+The refiner is deterministic and parameter-free (lexical query-relevance
+scoring plus Jaccard duplicate suppression), so it runs on every retrieval with
+no extra API calls. Raw results are still captured on the retriever for the
+grounding auditor, so reports are written from the refined context but audited
+against the full evidence set. Adapted from the distill-based context refiner
+in *Mitigating Context Interference for Reliable and Efficient Search Agents*
+(CRRL, arXiv:2608.10743) — Mode 2 adapted port, where CRRL's distilled small
+LLM is replaced by the parameter-free relevance scorer and its RL-training
+integration is not ported (this pipeline has no training loop). Implementation
+lives in `src/agents/context_refiner.py`.
+

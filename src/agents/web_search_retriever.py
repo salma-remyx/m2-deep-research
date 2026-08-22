@@ -5,6 +5,7 @@ import httpx
 from typing import Dict, Any, List
 from src.tools.exa_tool import ExaTool
 from src.utils.config import Config
+from src.agents.context_refiner import ContextRefiner
 
 
 class WebSearchRetriever:
@@ -21,6 +22,9 @@ class WebSearchRetriever:
         self.model = Config.OPENROUTER_MODEL
         # Last set of raw search results gathered for an audit pass.
         self.last_search_results: List[Dict[str, Any]] = []
+        # Distills the latest retrieved turn before it reaches the synthesis
+        # prompt (CRRL, arXiv:2608.10743v1 -- "refine context and then generate").
+        self.context_refiner = ContextRefiner()
 
         self.system_prompt = """You are a web search retrieval specialist.
 
@@ -211,8 +215,14 @@ Be thorough and detailed - this will feed into a comprehensive research report."
             # Expose raw results for the supervisor's grounding auditor.
             self.last_search_results = search_results
 
+            # Refine context and then generate: distill the latest retrieved
+            # turn so irrelevant/redundant text does not interfere with
+            # synthesis. The raw results stay on last_search_results so the
+            # grounding audit still sees the full evidence set.
+            refined_results = self.context_refiner.refine(research_query, search_results)
+
             # Synthesize findings
-            findings = self.synthesize_findings(research_query, search_results)
+            findings = self.synthesize_findings(research_query, refined_results)
 
             return findings
 
